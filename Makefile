@@ -20,6 +20,7 @@
 OS ?= $(shell uname)
 
 CC ?= gcc
+AR ?= ar
 DEFAULT_CFLAGS := -std=c99
 DEFAULT_CFLAGS += -Wall -Wextra -Wno-unused-result
 
@@ -57,14 +58,40 @@ BINFILES = jtag-loop.sunxi fel-sdboot.sunxi uart0-helloworld-sdboot.sunxi
 MKSUNXIBOOT ?= mksunxiboot
 PATH_DIRS := $(shell echo $$PATH | sed -e 's/:/ /g')
 # Try to guess a suitable default ARM cross toolchain
-CROSS_DEFAULT := arm-none-eabi-
+CROSS_DEFAULT := arm_toolchains/xpack-arm-none-eabi-gcc-12.2.1-1.2/bin/arm-none-eabi-
 CROSS_COMPILE ?= $(or $(shell ./find-arm-gcc.sh),$(CROSS_DEFAULT))
 CROSS_CC := $(CROSS_COMPILE)gcc
+CROSS_OBJCOPY := $(CROSS_COMPILE)objcopy
 
 DESTDIR ?=
 PREFIX  ?= /usr/local
 BINDIR  ?= $(PREFIX)/bin
 MANDIR  ?= $(PREFIX)/share/man/man1
+
+# Create libfdt src
+LIBFDT_SRCS = \
+libfdt/fdt.c \
+libfdt/fdt_ro.c \
+libfdt/fdt_wip.c \
+libfdt/fdt_sw.c \
+libfdt/fdt_rw.c \
+libfdt/fdt_strerror.c \
+libfdt/fdt_empty_tree.c \
+libfdt/fdt_addresses.c \
+libfdt/fdt_overlay.c \
+libfdt/fdt_check.c
+
+# Define the output directory
+LIBFDT_OBJDIR = libfdt_obj
+
+# Create a list of object files from source files
+LIBFDT_OBJS = $(patsubst libfdt/%.c,$(LIBFDT_OBJDIR)/%.o,$(LIBFDT_SRCS))
+
+# Define the library name
+LIBFDT_NAME = libfdt.a
+
+# Define the library cflags
+LIBFDT_CFLAGS = -Wall -Wextra -Ilibfdt
 
 .PHONY: all clean tools target-tools install install-tools install-target-tools
 .PHONY: check
@@ -103,9 +130,9 @@ install-misc: $(MISC_TOOLS)
 		install -m0755 $$t $(DESTDIR)$(BINDIR)/$$t ; \
 	done
 
-
 clean:
 	make -C tests/ clean
+	@rm -rf $(LIBFDT_OBJDIR)
 	@rm -vf $(TOOLS) $(FEXC_LINKS) $(TARGET_TOOLS) $(MISC_TOOLS)
 	@rm -vf version.h *.o *.elf *.sunxi *.bin *.nm *.orig
 
@@ -119,13 +146,20 @@ sunxi-fexc: fexc.h script.h script.c \
 	script_bin.h script_bin.c \
 	script_fex.h script_fex.c
 
+# pacman -S mingw-w64-x86_64-libusb
 LIBUSB = libusb-1.0
-LIBUSB_CFLAGS ?= `$(PKG_CONFIG) --cflags $(LIBUSB)`
-LIBUSB_LIBS ?= `$(PKG_CONFIG) --libs $(LIBUSB)`
+LIBUSB_CFLAGS = -I/mingw64/include/libusb-1.0
+LIBUSB_LIBS = -L/mingw64/lib -lusb-1.0
 
+# Or link libusb locally
+#LIBUSB = libusb-1.0
+#LIBUSB_CFLAGS = -Ilibusb-MinGW-x64/include/libusb-1.0
+#LIBUSB_LIBS = -Llibusb-MinGW-x64/lib -lusb-1.0
+
+# pacman -S mingw-w64-x86_64-zlib
 ZLIB = zlib
-ZLIB_CFLAGS ?= `$(PKG_CONFIG) --cflags $(ZLIB)`
-ZLIB_LIBS ?= `$(PKG_CONFIG) --libs $(ZLIB)`
+ZLIB_CFLAGS = -I/mingw64/include
+ZLIB_LIBS = -L/mingw64/lib -lz
 
 ifeq ($(OS),Windows_NT)
 	# Windows lacks mman.h / mmap()
@@ -141,9 +175,21 @@ SOC_INFO := soc_info.c soc_info.h
 FEL_LIB  := fel_lib.c fel_lib.h
 SPI_FLASH:= fel-spiflash.c fel-spiflash.h fel-remotefunc-spi-data-transfer.h
 
-sunxi-fel: fel.c fit_image.c thunks/fel-to-spl-thunk.h $(PROGRESS) $(SOC_INFO) $(FEL_LIB) $(SPI_FLASH)
+sunxi-fel: $(LIBFDT_OBJDIR) $(LIBFDT_NAME) fel.c fit_image.c thunks/fel-to-spl-thunk.h $(PROGRESS) $(SOC_INFO) $(FEL_LIB) $(SPI_FLASH)
 	$(CC) $(HOST_CFLAGS) $(LIBUSB_CFLAGS) $(ZLIB_CFLAGS) $(LDFLAGS) -o $@ \
-		$(filter %.c,$^) $(LIBS) $(LIBUSB_LIBS) $(ZLIB_LIBS) -lfdt
+		$(filter %.c,$^) $(LIBS) $(LIBUSB_LIBS) $(ZLIB_LIBS) -Ilibfdt -L$(LIBFDT_OBJDIR) -lfdt
+
+# Create output directory
+$(LIBFDT_OBJDIR):
+	@mkdir -p $(LIBFDT_OBJDIR)
+
+# Build library
+$(LIBFDT_NAME): $(LIBFDT_OBJS)
+	$(AR) rcs $(LIBFDT_OBJDIR)/$(LIBFDT_NAME) $(LIBFDT_OBJS)
+
+# Compile source files to object files
+$(LIBFDT_OBJDIR)/%.o: libfdt/%.c
+	$(CC) $(LIBFDT_CFLAGS) -c $< -o $@
 
 sunxi-nand-part: nand-part-main.c nand-part.c nand-part-a10.h nand-part-a20.h
 	$(CC) $(HOST_CFLAGS) -c -o nand-part-main.o nand-part-main.c
@@ -167,8 +213,11 @@ ARM_ELF_FLAGS += -fno-common -fno-builtin -ffreestanding -nostdinc -fno-strict-a
 ARM_ELF_FLAGS += -mno-thumb-interwork -fno-stack-protector -fno-toplevel-reorder
 ARM_ELF_FLAGS += -Wstrict-prototypes -Wno-format-nonliteral -Wno-format-security
 
+jtag-loop.bin: jtag-loop.elf jtag-loop.c jtag-loop.lds
+	$(CROSS_OBJCOPY) -O binary jtag-loop.elf jtag-loop.bin
+
 jtag-loop.elf: jtag-loop.c jtag-loop.lds
-	$(CROSS_CC) -g $(ARM_ELF_FLAGS) $< -nostdlib -o $@ -T jtag-loop.lds -Wl,-N
+	$(CROSS_CC) $(ARM_ELF_FLAGS) $< -nostdlib -o $@ -T jtag-loop.lds -Wl,-Map=jtag-loop.map
 
 fel-sdboot.elf: fel-sdboot.S fel-sdboot.lds
 	$(CROSS_CC) -march=armv5te -g $(ARM_ELF_FLAGS) $< -nostdlib -o $@ -T fel-sdboot.lds -Wl,-N
