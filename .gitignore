@@ -8,3 +8,12 @@ sunxi-pio
 version.h
 *.o
 *.swp
+jtag-loop.bin
+jtag-loop.elf
+jtag-loop.map
+libfdt_obj/
+sunxi-bootinfo.exe
+sunxi-fel.exe
+sunxi-fexc.exe
+sunxi-nand-part.exe
+sunxi-pio.exe
