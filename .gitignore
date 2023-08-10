@@ -11,6 +11,8 @@ version.h
 jtag-loop.bin
 jtag-loop.elf
 jtag-loop.map
+jtag-loop.sunxi
+mksunxiboot/mksunxiboot.exe
 libfdt_obj/
 sunxi-bootinfo.exe
 sunxi-fel.exe

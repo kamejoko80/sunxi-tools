@@ -20,6 +20,17 @@
  ``` 
  
  - Reset YuzukiHD board, FEL mode will apear imidiately
+
+# How to flash jtag-loop.sunxi
+
+ - First build sunxi bootable image:
+ 
+ ```
+   > mksunxiboot.exe jtag-loop.bin jtag-loop.sunxi
+   > dd if=jtag-loop.sunxi of=/dev/sdc bs=1k seek=8   
+ ```
+ 
+ - Reset YuzukiHD board, jtag-loop will be executed and LED1 will be on. 
  
 ## License
 This software is licensed under the terms of GPLv2+ as defined by the
