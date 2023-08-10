@@ -134,7 +134,7 @@ clean:
 	make -C tests/ clean
 	@rm -rf $(LIBFDT_OBJDIR)
 	@rm -vf $(TOOLS) $(FEXC_LINKS) $(TARGET_TOOLS) $(MISC_TOOLS)
-	@rm -vf version.h *.o *.elf *.sunxi *.bin *.nm *.orig
+	@rm -vf version.h *.o *.elf *.sunxi *.bin *.nm *.orig *.map
 
 $(TOOLS) $(TARGET_TOOLS) $(MISC_TOOLS): Makefile common.h version.h
 

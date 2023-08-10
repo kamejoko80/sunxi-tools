@@ -85,7 +85,7 @@ void _start(void)
     //PF_CFG_REG |= 1 << 24; // PF6 output
     //PF_DAT_REG |= 1 << 6;  // PF6 is high
 
-#if 0
+#if 1
     // Configure port F as R_JTAG pins
     //PF_CFG_REG = 0xF16F6F66;
     //PF_DAT_REG |= 1 << 6; // PF6 is high
@@ -97,7 +97,7 @@ void _start(void)
 #else
     // Configure port H as JTAG pins
     PH_CFG1_REG &= 0xF0000FFF;
-    PH_CFG1_REG |= 0xF2222FFF;
+    PH_CFG1_REG |= 0x02222000;
     // Test LED on port PF6
     PF_CFG_REG &= 0xF0FFFFFF;
     PF_CFG_REG |= 1 << 24; // PF6 output

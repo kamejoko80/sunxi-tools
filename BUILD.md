@@ -31,6 +31,7 @@
  ```
  
  - Reset YuzukiHD board, jtag-loop will be executed and LED1 will be on. 
+ - Note: I have tried to configure JTAG on PH but unfortunately it doesn't work, currently JTAG works only with PF
  
 ## License
 This software is licensed under the terms of GPLv2+ as defined by the
