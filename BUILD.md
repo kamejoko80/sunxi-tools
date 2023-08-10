@@ -10,6 +10,17 @@
    > make clean tools jtag-loop.bin
  ```
 
+# How to flash fel-sdboot.sunxi
+
+ - Run msys2 shell as administrator user
+ - Execute the below dd command:
+
+ ```
+   > dd if=bin/fel-sdboot.sunxi of=/dev/sdc bs=1k seek=8 
+ ``` 
+ 
+ - Reset YuzukiHD board, FEL mode will apear imidiately
+ 
 ## License
 This software is licensed under the terms of GPLv2+ as defined by the
 Free Software Foundation, details can be read in the [LICENSE.md](LICENSE.md)
