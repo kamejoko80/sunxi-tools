@@ -87,9 +87,13 @@ void fel_writel(feldev_handle *dev, uint32_t addr, uint32_t val);
 #define H6_CCM_SPI_BGR              (0x03001000 + 0x96C)
 #define H6_CCM_SPI0_GATE_RESET      (1 << 0 | 1 << 16)
 
+#define V851S_AHB_CLK_REG           (0x02001000 + 0x0510)
+#define V851S_SPI0_CLK_REG          (0x02001000 + 0x0940)
+
 #define SUNIV_GPC_SPI0              (2)
 #define SUNXI_GPC_SPI0              (3)
 #define SUN50I_GPC_SPI0             (4)
+#define SUN8I_GPC_SPI0              (6)
 
 #define SUN4I_CTL_ENABLE            (1 << 0)
 #define SUN4I_CTL_MASTER            (1 << 1)
@@ -117,6 +121,25 @@ void fel_writel(feldev_handle *dev, uint32_t addr, uint32_t val);
 #define SUN6I_SPI0_TXD              (spi_base(dev) + 0x200)
 #define SUN6I_SPI0_RXD              (spi_base(dev) + 0x300)
 
+#define SUN8I_SPI0_GCR              (spi_base(dev) + 0x0004) // SPI Global Control Register
+#define SUN8I_SPI0_TCR              (spi_base(dev) + 0x0008) // SPI Transfer Control Register
+#define SUN8I_SPI0_IER              (spi_base(dev) + 0x0010) // SPI Interrupt Control Register
+#define SUN8I_SPI0_ISR              (spi_base(dev) + 0x0014) // SPI Interrupt Status Register
+#define SUN8I_SPI0_FCR              (spi_base(dev) + 0x0018) // SPI FIFO Control Register
+#define SUN8I_SPI0_FSR              (spi_base(dev) + 0x001C) // SPI FIFO Status Register
+#define SUN8I_SPI0_WCR              (spi_base(dev) + 0x0020) // SPI Wait Clock Register
+#define SUN8I_SPI0_SAMP_DL          (spi_base(dev) + 0x0028) // SPI Sample Delay Control Register
+#define SUN8I_SPI0_MBC              (spi_base(dev) + 0x0030) // SPI Master Burst Counter Register
+#define SUN8I_SPI0_MTC              (spi_base(dev) + 0x0034) // SPI Master Transmit Counter Register
+#define SUN8I_SPI0_BCC              (spi_base(dev) + 0x0038) // SPI Master Burst Control Register
+#define SUN8I_SPI0_BATCR            (spi_base(dev) + 0x0040) // SPI Bit-Aligned Transfer Configure Register
+#define SUN8I_SPI0_BA_CCR           (spi_base(dev) + 0x0044) // SPI Bit-Aligned Clock Configuration Register
+#define SUN8I_SPI0_TBR              (spi_base(dev) + 0x0048) // SPI TX Bit Register
+#define SUN8I_SPI0_RBR              (spi_base(dev) + 0x004C) // SPI RX Bit Register
+#define SUN8I_SPI0_NDMA_MODE_CTL    (spi_base(dev) + 0x0088) // SPI Normal DMA Mode Control Register
+#define SUN8I_SPI0_TXD              (spi_base(dev) + 0x0200) // SPI TX Data Register
+#define SUN8I_SPI0_RXD              (spi_base(dev) + 0x0300) // SPI RX Data Register
+
 #define CCM_SPI0_CLK_DIV_BY_2       (0x1000)
 #define CCM_SPI0_CLK_DIV_BY_4       (0x1001)
 #define CCM_SPI0_CLK_DIV_BY_6       (0x1002)
@@ -131,6 +154,8 @@ static uint32_t gpio_base(feldev_handle *dev)
 	case 0x1728: /* H6 */
 	case 0x1823: /* H616 */
 		return 0x0300B000;
+	case 0x1886: /* V851s */
+		return 0x02000000;        
 	default:
 		return 0x01C20800;
 	}
@@ -151,8 +176,21 @@ static uint32_t spi_base(feldev_handle *dev)
 	case 0x1728: /* H6 */
 	case 0x1823: /* H616 */
 		return 0x05010000;
+	case 0x1886: /* V851s */
+		return 0x04025000;
 	default:
 		return 0x01C68000;
+	}
+}
+
+static bool spi_is_sun8i(feldev_handle *dev)
+{
+	soc_info_t *soc_info = dev->soc_info;
+	switch (soc_info->soc_id) {
+	case 0x1886: /* V851s */
+		return true;
+	default:
+		return false;
 	}
 }
 
@@ -162,13 +200,23 @@ static uint32_t spi_base(feldev_handle *dev)
 static void gpio_set_cfgpin(feldev_handle *dev, int port_num, int pin_num,
 			    int val)
 {
-	uint32_t port_base = gpio_base(dev) + port_num * 0x24;
-	uint32_t cfg_reg   = port_base + 4 * (pin_num / 8);
-	uint32_t pin_idx   = pin_num % 8;
-	uint32_t x = readl(cfg_reg);
-	x &= ~(0x7 << (pin_idx * 4));
-	x |= val << (pin_idx * 4);
-	writel(x, cfg_reg);
+    if(spi_is_sun8i(dev)){
+        uint32_t port_base = gpio_base(dev) + port_num * 0x30;
+        uint32_t cfg_reg   = port_base + 4 * (pin_num / 8);
+        uint32_t pin_idx   = pin_num % 8;
+        uint32_t x = readl(cfg_reg);
+        x &= ~(0xf << (pin_idx * 4));
+        x |= val << (pin_idx * 4);
+        writel(x, cfg_reg);
+    }else {
+        uint32_t port_base = gpio_base(dev) + port_num * 0x24;
+        uint32_t cfg_reg   = port_base + 4 * (pin_num / 8);
+        uint32_t pin_idx   = pin_num % 8;
+        uint32_t x = readl(cfg_reg);
+        x &= ~(0x7 << (pin_idx * 4));
+        x |= val << (pin_idx * 4);
+        writel(x, cfg_reg);        
+    }        
 }
 
 static bool spi_is_sun6i(feldev_handle *dev)
@@ -259,66 +307,83 @@ static bool spi0_init(feldev_handle *dev)
 		gpio_set_cfgpin(dev, PC, 3, SUN50I_GPC_SPI0);	/* SPI0_CS0 */
 		gpio_set_cfgpin(dev, PC, 4, SUN50I_GPC_SPI0);	/* SPI0_MISO */
 		break;
+	case 0x1886: /* Allwinner V851s */
+		gpio_set_cfgpin(dev, PC, 0, SUN8I_GPC_SPI0);	/* SPI0_CLK */
+		gpio_set_cfgpin(dev, PC, 2, SUN8I_GPC_SPI0);	/* SPI0_MOSI */
+		gpio_set_cfgpin(dev, PC, 1, SUN8I_GPC_SPI0);	/* SPI0_CS0 */
+		gpio_set_cfgpin(dev, PC, 3, SUN8I_GPC_SPI0);	/* SPI0_MISO */
+		break;        
 	default: /* Unknown/Unsupported SoC */
 		printf("SPI support not implemented yet for %x (%s)!\n",
 		       soc_info->soc_id, soc_info->name);
 		return false;
 	}
 
-	if (soc_is_h6_style(dev)) {
-		reg_val = readl(H6_CCM_SPI_BGR);
-		reg_val |= H6_CCM_SPI0_GATE_RESET;
-		writel(reg_val, H6_CCM_SPI_BGR);
-	} else {
-		if (spi_is_sun6i(dev)) {
-			/* Deassert SPI0 reset */
-			reg_val = readl(SUN6I_BUS_SOFT_RST_REG0);
-			reg_val |= SUN6I_SPI0_RST;
-			writel(reg_val, SUN6I_BUS_SOFT_RST_REG0);
-		}
-
-		reg_val = readl(CCM_AHB_GATING0);
-		reg_val |= CCM_AHB_GATE_SPI0;
-		writel(reg_val, CCM_AHB_GATING0);
-	}
-
-	if (soc_info->soc_id == 0x1663) {	/* suniv F1C100s */
-		/*
-		 * suniv doesn't have a module clock for SPI0 and the clock
-		 * source is always the AHB clock. Setup AHB to 200 MHz by
-		 * setting PLL6 to 600 MHz with a divider of 3, then program
-		 * the internal SPI dividier to 32.
-		 */
-
-		/* Set PLL6 to 600MHz */
-		writel(0x80041801, SUNIV_PLL6_CTL);
-		/* PLL6:AHB:APB = 6:2:1 */
-		writel(0x00003180, SUNIV_AHB_APB_CFG);
-		/* divide by 32 */
-		writel(CCM_SPI0_CLK_DIV_BY_32, SUN6I_SPI0_CCTL);
-	} else {
-		/* divide 24MHz OSC by 4 */
-		writel(CCM_SPI0_CLK_DIV_BY_4,
-		       spi_is_sun6i(dev) ? SUN6I_SPI0_CCTL : SUN4I_SPI0_CCTL);
-		/* Choose 24MHz from OSC24M and enable clock */
-		writel(1U << 31,
-		       soc_is_h6_style(dev) ? H6_CCM_SPI0_CLK : CCM_SPI0_CLK);
-	}
-
-	if (spi_is_sun6i(dev)) {
-		/* Enable SPI in the master mode and do a soft reset */
-		reg_val = readl(SUN6I_SPI0_GCR);
-		reg_val |= (1U << 31) | 3;
-		writel(reg_val, SUN6I_SPI0_GCR);
-		/* Wait for completion */
-		while (readl(SUN6I_SPI0_GCR) & (1U << 31)) {}
-	} else {
-		reg_val = readl(SUN4I_SPI0_CTL);
-		reg_val |= SUN4I_CTL_MASTER;
-		reg_val |= SUN4I_CTL_ENABLE | SUN4I_CTL_TF_RST | SUN4I_CTL_RF_RST;
-		writel(reg_val, SUN4I_SPI0_CTL);
-	}
-
+    /* Init V851s SPI clock */
+    if(spi_is_sun8i(dev)) {
+        /* Configure AHB clock = HOSC (24MHz) */
+        writel(0, V851S_AHB_CLK_REG);
+        /* Configure SPI clock source = HOSC */
+        writel((1 << 31), V851S_SPI0_CLK_REG);
+        printf("Dumping AHB_CLK_REG %X\r\n", readl(V851S_AHB_CLK_REG));
+        printf("Dumping SPI0_CLK_REG %X\r\n", readl(V851S_SPI0_CLK_REG));
+        exit(1);
+    } else {
+        if (soc_is_h6_style(dev)) {
+            reg_val = readl(H6_CCM_SPI_BGR);
+            reg_val |= H6_CCM_SPI0_GATE_RESET;
+            writel(reg_val, H6_CCM_SPI_BGR);
+        } else {
+            if (spi_is_sun6i(dev)) {
+                /* Deassert SPI0 reset */
+                reg_val = readl(SUN6I_BUS_SOFT_RST_REG0);
+                reg_val |= SUN6I_SPI0_RST;
+                writel(reg_val, SUN6I_BUS_SOFT_RST_REG0);
+            }
+    
+            reg_val = readl(CCM_AHB_GATING0);
+            reg_val |= CCM_AHB_GATE_SPI0;
+            writel(reg_val, CCM_AHB_GATING0);
+        }
+    
+        if (soc_info->soc_id == 0x1663) {	/* suniv F1C100s */
+            /*
+            * suniv doesn't have a module clock for SPI0 and the clock
+            * source is always the AHB clock. Setup AHB to 200 MHz by
+            * setting PLL6 to 600 MHz with a divider of 3, then program
+            * the internal SPI dividier to 32.
+            */
+    
+            /* Set PLL6 to 600MHz */
+            writel(0x80041801, SUNIV_PLL6_CTL);
+            /* PLL6:AHB:APB = 6:2:1 */
+            writel(0x00003180, SUNIV_AHB_APB_CFG);
+            /* divide by 32 */
+            writel(CCM_SPI0_CLK_DIV_BY_32, SUN6I_SPI0_CCTL);
+        } else {
+            /* divide 24MHz OSC by 4 */
+            writel(CCM_SPI0_CLK_DIV_BY_4,
+                spi_is_sun6i(dev) ? SUN6I_SPI0_CCTL : SUN4I_SPI0_CCTL);
+            /* Choose 24MHz from OSC24M and enable clock */
+            writel(1U << 31,
+                soc_is_h6_style(dev) ? H6_CCM_SPI0_CLK : CCM_SPI0_CLK);
+        }
+    
+        if (spi_is_sun6i(dev)) {
+            /* Enable SPI in the master mode and do a soft reset */
+            reg_val = readl(SUN6I_SPI0_GCR);
+            reg_val |= (1U << 31) | 3;
+            writel(reg_val, SUN6I_SPI0_GCR);
+            /* Wait for completion */
+            while (readl(SUN6I_SPI0_GCR) & (1U << 31)) {}
+        } else {
+            reg_val = readl(SUN4I_SPI0_CTL);
+            reg_val |= SUN4I_CTL_MASTER;
+            reg_val |= SUN4I_CTL_ENABLE | SUN4I_CTL_TF_RST | SUN4I_CTL_RF_RST;
+            writel(reg_val, SUN4I_SPI0_CTL);
+        }
+    }
+    
 	return true;
 }
 
