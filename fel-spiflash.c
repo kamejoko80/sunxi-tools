@@ -1488,13 +1488,15 @@ int spi_xfer(feldev_handle *dev, const uint8_t *tx, size_t tx_len, size_t dummy_
 
 	spi_set_bc_tc_stc(dev, tx_len, rx_len, tx_len, dummy_len);
     spi_ss_level(dev, 1);
-	spi_start_xfer(dev);
 
 	/* tx */
 	if (tx_len) {
 		if (sunxi_spi_cpu_writel(dev, tx, tx_len))
 			return -1;
 	}
+    
+    /* start transfer */
+    spi_start_xfer(dev);
     
 	/* check tx/rx finish */
 	/* wait transfer complete */
@@ -1812,6 +1814,8 @@ static bool spi0_init(feldev_handle *dev)
         
         uint8_t	tx[] = {0x9F, 0x00, 0x00, 0x00, 0x00, 0x00};
         uint8_t rx[32];
+        
+        memset(rx, 0x00, 32);
         
         // int spi_xfer(feldev_handle *dev, const uint8_t *tx, size_t tx_len, size_t dummy_len, uint8_t *rx, size_t rx_len)
         spi_xfer(dev, tx, 1, 1, rx, 3);
