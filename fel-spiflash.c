@@ -252,10 +252,15 @@ struct core_pll_freq_tbl {
     int pading;
 };
 
+/* Debugging */
+#define DBG_INFO(...) printf(__VA_ARGS__)
+
 /* V851S defines */
 #define CONFIG_MACH_SUN8IW21
 #define SUNXI_CCM_BASE         (0x02001000)  
 #define SUNXI_RTC_BASE         (0x07090000)
+#define SPI_XFER_END           (1<<1)
+#define SPI_XFER_BEGIN         (1<<0)
 
 /* pll1 bit field */
 #define CCM_PLL1_CTRL_EN		BIT(31)
@@ -367,37 +372,38 @@ struct core_pll_freq_tbl {
 #define SPI_MAX_FREQUENCY	100000000 /* spi controller just support 80Mhz */
 
 /* SPI Registers offsets from peripheral base address */
-#define SPI_VER_REG		(0x00)	/* version number register */
-#define SPI_GC_REG		(0x04)	/* global control register */
-#define SPI_TC_REG		(0x08)	/* transfer control register */
-#define SPI_INT_CTL_REG		(0x10)	/* interrupt control register */
-#define SPI_INT_STA_REG		(0x14)	/* interrupt status register */
-#define SPI_FIFO_CTL_REG	(0x18)	/* fifo control register */
-#define SPI_FIFO_STA_REG	(0x1C)	/* fifo status register */
-#define SPI_WAIT_CNT_REG	(0x20)	/* wait clock counter register */
-#define SPI_CLK_CTL_REG		(0x24)	/* clock rate control register */
-#define SPI_SDC_REG		(0x28)	/* sample delay control register */
-#define SPI_BURST_CNT_REG	(0x30)	/* burst counter register */
-#define SPI_TRANSMIT_CNT_REG	(0x34)	/* transmit counter register */
-#define SPI_BCC_REG		(0x38)	/* burst control counter register */
-#define SPI_DMA_CTL_REG		(0x88)	/* DMA control register, only for 1639 */
-#define SPI_TXDATA_REG		(0x200)	/* tx data register */
-#define SPI_RXDATA_REG		(0x300)	/* rx data register */
+#define SPI_VER_REG          (0x00)  /* version number register */
+#define SPI_GC_REG           (0x04)  /* global control register */
+#define SPI_TC_REG           (0x08)  /* transfer control register */
+#define SPI_INT_CTL_REG      (0x10)  /* interrupt control register */
+#define SPI_INT_STA_REG      (0x14)  /* interrupt status register */
+#define SPI_FIFO_CTL_REG     (0x18)  /* fifo control register */
+#define SPI_FIFO_STA_REG     (0x1C)  /* fifo status register */
+#define SPI_WAIT_CNT_REG     (0x20)  /* wait clock counter register */
+#define SPI_CLK_CTL_REG      (0x24)  /* clock rate control register */
+#define SPI_SDC_REG          (0x28)  /* sample delay control register */
+#define SPI_BURST_CNT_REG    (0x30)  /* burst counter register */
+#define SPI_TRANSMIT_CNT_REG (0x34)  /* transmit counter register */
+#define SPI_BCC_REG          (0x38)  /* burst control counter register */
+#define SPI_BATCR_REG        (0x40)  /* bit-aligned transfer configure register */ 
+#define SPI_DMA_CTL_REG      (0x88)  /* DMA control register, only for 1639 */
+#define SPI_TXDATA_REG       (0x200) /* tx data register */
+#define SPI_RXDATA_REG       (0x300) /* rx data register */
 
 /* SPI Global Control Register Bit Fields & Masks,default value:0x0000_0080 */
 #define SPI_GC_EN		(0x1 <<  0) /* SPI module enable control 1:enable; 0:disable; default:0 */
 #define SPI_GC_MODE		(0x1 <<  1) /* SPI function mode select 1:master; 0:slave; default:0 */
-#define SPI_GC_TP_EN		(0x1 <<  7) /* SPI transmit stop enable 1:stop transmit data when RXFIFO is full; 0:ignore RXFIFO status; default:1 */
+#define SPI_GC_TP_EN	(0x1 <<  7) /* SPI transmit stop enable 1:stop transmit data when RXFIFO is full; 0:ignore RXFIFO status; default:1 */
 #define SPI_GC_SRST		(0x1 << 31) /* soft reset, write 1 will clear SPI control, auto clear to 0 */
 
 /* SPI Transfer Control Register Bit Fields & Masks,default value:0x0000_0087 */
 #define SPI_TC_PHA		(0x1 <<  0) /* SPI Clock/Data phase control,0: phase0,1: phase1;default:1 */
 #define SPI_TC_POL		(0x1 <<  1) /* SPI Clock polarity control,0:low level idle,1:high level idle;default:1 */
 #define SPI_TC_SPOL		(0x1 <<  2) /* SPI Chip select signal polarity control,default: 1,low effective like this:~~|_____~~ */
-#define SPI_TC_SSCTL		(0x1 <<  3) /* SPI chip select control,default 0:SPI_SSx remains asserted between SPI bursts,1:negate SPI_SSx between SPI bursts */
-#define SPI_TC_SS_MASK		(0x3 <<  4) /* SPI chip select:00-SPI_SS0;01-SPI_SS1;10-SPI_SS2;11-SPI_SS3*/
-#define SPI_TC_SS_OWNER		(0x1 <<  6) /* SS output mode select default is 0:automatic output SS;1:manual output SS */
-#define SPI_TC_SS_LEVEL		(0x1 <<  7) /* defautl is 1:set SS to high;0:set SS to low */
+#define SPI_TC_SSCTL	(0x1 <<  3) /* SPI chip select control,default 0:SPI_SSx remains asserted between SPI bursts,1:negate SPI_SSx between SPI bursts */
+#define SPI_TC_SS_MASK	(0x3 <<  4) /* SPI chip select:00-SPI_SS0;01-SPI_SS1;10-SPI_SS2;11-SPI_SS3*/
+#define SPI_TC_SS_OWNER	(0x1 <<  6) /* SS output mode select default is 0:automatic output SS;1:manual output SS */
+#define SPI_TC_SS_LEVEL	(0x1 <<  7) /* defautl is 1:set SS to high;0:set SS to low */
 #define SPI_TC_DHB		(0x1 <<  8) /* Discard Hash Burst,default 0:receiving all spi burst in BC period 1:discard unused,fectch WTC bursts */
 #define SPI_TC_DDB		(0x1 <<  9) /* Dummy burst Type,default 0: dummy spi burst is zero;1:dummy spi burst is one */
 #define SPI_TC_RPSM		(0x1 << 10) /* select mode for high speed write,0:normal write mode,1:rapids write mode,default 0 */
@@ -590,7 +596,7 @@ void fel_writel(feldev_handle *dev, uint32_t addr, uint32_t val);
 #define SUNIV_GPC_SPI0              (2)
 #define SUNXI_GPC_SPI0              (3)
 #define SUN50I_GPC_SPI0             (4)
-#define SUN8I_GPC_SPI0              (6)
+#define SUN8I_GPC_SPI0              (4)
 
 #define SUN4I_CTL_ENABLE            (1 << 0)
 #define SUN4I_CTL_MASTER            (1 << 1)
@@ -958,7 +964,7 @@ static int sunxi_spi_clk_init(feldev_handle *dev, uint32_t mod_clk)
 #else
 	source_clk = clock_get_pll6(dev) * 1000000;
 #endif
-	printf("source_clk: %d Hz, mod_clk: %d Hz\n", source_clk, mod_clk);
+	//printf("source_clk: %d Hz, mod_clk: %d Hz\n", source_clk, mod_clk);
 
 	div = (source_clk + mod_clk - 1) / mod_clk;
 	div = div == 0 ? 1 : div;
@@ -1006,11 +1012,9 @@ static int sunxi_spi_clk_init(feldev_handle *dev, uint32_t mod_clk)
     /* spi0 gating */
     writel((1 << 16) | (1 << 0), (uint32_t)&ccm->spi_gate_reset);
     
-    printf("spi_gate_reset =====> %X\r\n", readl((uint32_t)&ccm->spi_gate_reset));
-    
 #endif
 
-	printf("src: %d Hz, spic: %d Hz, n=%d, m=%d\n", source_clk, source_clk/(1 << n)/m, n, m);
+    DBG_INFO("src: %d Hz, spic: %d Hz, n=%d, m=%d\n", source_clk, source_clk/(1 << n)/m, n, m);
 
 	return 0;
 }
@@ -1043,7 +1047,7 @@ static int sunxi_get_spic_clk(feldev_handle *dev)
 			break;
 	}
 	sclk_freq = clk / (1 << n) / m;
-	printf("sclk_freq = %d Hz, reg_val: %x , n=%d, m=%d\n", sclk_freq, reg_val, n, m);
+	DBG_INFO("sclk_freq = %d Hz, reg_val: %x , n=%d, m=%d\n", sclk_freq, reg_val, n, m);
 	return sclk_freq;
 }
 
@@ -1063,9 +1067,16 @@ static void spi_config_tc(feldev_handle *dev)
 		reg_val &= ~(SPI_TC_SDM | SPI_TC_SDC);    
     
 	reg_val |= SPI_TC_DHB | SPI_TC_SS_LEVEL | SPI_TC_SPOL;
-	writel(reg_val, V851S_SPI0_BASE + SPI_TC_REG);
+	
+    /* SPI MODE_0 CPOL=0, CPHA=0 */
+    reg_val &= ~(SPI_TC_PHA | SPI_TC_POL);
     
-    printf("SPI_TC_REG = %X\r\n", readl(V851S_SPI0_BASE + SPI_TC_REG));
+    /* SDC = 0 */
+    reg_val &= ~SPI_TC_SDC;
+    
+    writel(reg_val, V851S_SPI0_BASE + SPI_TC_REG);
+    
+    DBG_INFO("SPI_TC_REG = %X\r\n", readl(V851S_SPI0_BASE + SPI_TC_REG));
     
 }
 
@@ -1131,7 +1142,7 @@ static void spi_set_clk(feldev_handle *dev, uint32_t spi_clk, uint32_t ahb_clk, 
 	uint32_t reg_val = 0;
 	uint32_t div_clk = 0;
 
-	printf("set spi clock %d, mclk %d\n", spi_clk, ahb_clk);
+	DBG_INFO("set spi clock %d, mclk %d\n", spi_clk, ahb_clk);
 	reg_val = readl(V851S_SPI0_BASE + SPI_CLK_CTL_REG);
 
 	/* CDR2 */
@@ -1139,7 +1150,7 @@ static void spi_set_clk(feldev_handle *dev, uint32_t spi_clk, uint32_t ahb_clk, 
 		div_clk = ahb_clk / (spi_clk * 2) - 1;
 		reg_val &= ~SPI_CLK_CTL_CDR2;
 		reg_val |= (div_clk | SPI_CLK_CTL_DRS);
-		printf("CDR2 - n = %d\n", div_clk);
+		DBG_INFO("CDR2 - n = %d\n", div_clk);
 	} else { /* CDR1 */
 		while (ahb_clk > spi_clk) {
 			div_clk++;
@@ -1147,7 +1158,7 @@ static void spi_set_clk(feldev_handle *dev, uint32_t spi_clk, uint32_t ahb_clk, 
 		}
 		reg_val &= ~(SPI_CLK_CTL_CDR1 | SPI_CLK_CTL_DRS);
 		reg_val |= (div_clk << 8);
-		printf("CDR1 - n = %d\n", div_clk);
+		DBG_INFO("CDR1 - n = %d\n", div_clk);
 	}
 
 	writel(reg_val, V851S_SPI0_BASE + SPI_CLK_CTL_REG);
@@ -1186,6 +1197,28 @@ static void spi_ss_owner(feldev_handle *dev, uint32_t on_off)
 	else
 		reg_val &= ~SPI_TC_SS_OWNER;
 	writel(reg_val, V851S_SPI0_BASE + SPI_TC_REG);
+}
+
+/* config bit-aligned transfer  */
+static void spi_config_batcr(feldev_handle *dev)
+{
+    uint32_t reg_val = readl(V851S_SPI0_BASE + SPI_BATCR_REG);
+    
+    /* Configure the length of serial data frame (burst) of RX */
+    reg_val |= (8 << 16); // 8 bits
+    
+    /* Configure the length of serial data frame (burst) of TX */
+    reg_val |= (8 << 8);  // 8 bits
+    
+    // Work Mode Select
+    // 00: Data frame is byte aligned in standard SPI, dual-output/dual
+    // input SPI, dual IO SPI, and quad-output/quad-input SPI
+    // 01: Reserved
+    // 10: Data frame is bit aligned in 3-wire SPI
+    // 11: Data frame is bit aligned in standard SPI
+    reg_val |= 0x3; // bit aligned 
+    
+    writel(reg_val, V851S_SPI0_BASE + SPI_BATCR_REG);   
 }
 
 /* disable irq type */
@@ -1237,55 +1270,59 @@ static void spi_reset_fifo(feldev_handle *dev)
 	reg_val |= (SPI_FIFO_CTL_RX_RST|SPI_FIFO_CTL_TX_RST);
 	/* Set the trigger level of RxFIFO/TxFIFO. */
 	reg_val &= ~(SPI_FIFO_CTL_RX_LEVEL|SPI_FIFO_CTL_TX_LEVEL);
-	reg_val |= (0x20<<16) | 0x20;
+    reg_val |= (0x20<<16) | 0x20; // TX_TRIG_LEVEL = 32, RX_TRIG_LEVEL = 32
 	writel(reg_val, V851S_SPI0_BASE + SPI_FIFO_CTL_REG);
 }
 
 static int sunxi_spi_cpu_writel(feldev_handle *dev, const unsigned char *buf, unsigned int len)
 {
-	unsigned int tx_len = len;	/* number of bytes receieved */
+	unsigned int tx_len = len;	/* number of bytes sent */
 	unsigned char *tx_buf = (unsigned char *)buf;
-	unsigned int poll_time = 0x7ffffff;
-
+ 
 	for (; tx_len > 0; --tx_len) {
+        /* wait for TX fifo ready */
+        while(!(readl(V851S_SPI0_BASE + SPI_INT_STA_REG) & SPI_INT_STA_TX_RDY));
 		writel(*tx_buf++, V851S_SPI0_BASE + SPI_TXDATA_REG);
-		if (spi_query_txfifo(dev) >= MAX_FIFU){
-            delay();
-        }
 	}
-
-	while (spi_query_txfifo(dev) && (--poll_time > 0)) {
-        delay();
-    }
-
-	if (poll_time <= 0) {
-		printf("cpu transfer data time out!\n");
-		return -1;
-	}
-
+    
 	return 0;
 }
 
 static int sunxi_spi_cpu_readl(feldev_handle *dev, unsigned char *buf, unsigned int len)
 {
-	unsigned int rx_len = len;	/* number of bytes sent */
 	unsigned char *rx_buf = buf;
-	unsigned int poll_time = 0x7ffffff;
-
-	while (rx_len && poll_time ) {
-        /* rxFIFO counter */
-		if (spi_query_rxfifo(dev) && (--poll_time > 0)) {
-			*rx_buf++ =  (unsigned char)readl(V851S_SPI0_BASE + SPI_RXDATA_REG);
-			--rx_len;
-		}
-        delay();
-	}
+    unsigned int i, act_len, word_cnt, rbyte_cnt;
+    uint32_t data;
     
-	if (poll_time <= 0) {
-		printf("cpu receive data time out!\n");
-		return -1;
-	}
-  
+    /* 
+     * because fel only supports 32bit access so we need
+     * to compine into word, rxfifo underun will occur if len is not
+     * multiple of 4 bytes     
+     */
+    act_len = spi_query_rxfifo(dev);
+    word_cnt = act_len / 4;
+    rbyte_cnt = act_len % 4;
+    
+    if(word_cnt) {
+        for(i = 0; i < word_cnt; i++)
+        {
+            data = readl(V851S_SPI0_BASE + SPI_RXDATA_REG);
+            *rx_buf++ = (unsigned char)data;
+            *rx_buf++ = (unsigned char)(data >> 8);
+            *rx_buf++ = (unsigned char)(data >> 16);
+            *rx_buf++ = (unsigned char)(data >> 24);
+        }
+    }
+
+    if(rbyte_cnt) {
+        data = readl(V851S_SPI0_BASE + SPI_RXDATA_REG);
+        for(i = 0; i < rbyte_cnt; i++)
+        {
+            *rx_buf++ = (unsigned char)data;
+            data >>= 8;
+        }
+    }
+    
 	return 0;
 }
 
@@ -1298,81 +1335,168 @@ static void spi_start_xfer(feldev_handle *dev)
 	writel(reg_val, V851S_SPI0_BASE + SPI_TC_REG);
 }
 
-#define SPI_XFER_END    (1<<1)
-#define SPI_XFER_BEGIN  (1<<0)
-
-int spi_xfer(feldev_handle *dev, unsigned int bitlen, const void *dout, void *din, unsigned long flags)
+/* set transfer total length BC, transfer length TC and single transmit length STC */
+static void spi_set_bc_tc_stc(feldev_handle *dev, uint32_t tx_len, uint32_t rx_len, uint32_t stc_len, uint32_t dummy_cnt)
 {
-	unsigned int len = bitlen / 8;
+    // SPI_MBC
+    // MBC
+    // Master Burst Counter
+    // In master mode, this field specifies the total burst number. The
+    // total transfer data include the TXD, RXD, and dummy burst.
+	uint32_t reg_val = readl(V851S_SPI0_BASE + SPI_BURST_CNT_REG);
+
+	reg_val &= ~SPI_BC_CNT_MASK;
+	reg_val |= (SPI_BC_CNT_MASK & (tx_len + rx_len + dummy_cnt));
+	writel(reg_val, V851S_SPI0_BASE + SPI_BURST_CNT_REG);
+
+    // SPI_MTC
+    // MWTC
+    // Master Write Transmit Counter
+    // In master mode, this field specifies the burst number that should
+    // be sent to TXFIFO before automatically sending dummy bursts. For
+    // saving bus bandwidth, the dummy bursts (all zero bits or all one
+    // bits) are sent by SPI Controller automatically.-
+	reg_val = readl(V851S_SPI0_BASE + SPI_TRANSMIT_CNT_REG);
+	reg_val &= ~SPI_TC_CNT_MASK;
+	reg_val |= (SPI_TC_CNT_MASK & tx_len);
+	writel(reg_val, V851S_SPI0_BASE + SPI_TRANSMIT_CNT_REG);
+
+    // SPI_BCC
+    // Quad_EN[29]
+    // DRM [28]
+    // DBC [27:24]
+    // Master Dummy Burst Counter
+    // In master mode, this field specifies the burst number that should
+    // be sent before receiving in dual SPI mode. The data does not care
+    // by the device.
+    // STC [23:0]
+    // Master Single Mode Transmit Counter
+    // In master mode, this field specifies the burst number that should
+    // be sent in the single mode before automatically sending dummy
+    // bursts. This is the first transmit counter in all bursts.
+	reg_val = readl(V851S_SPI0_BASE + SPI_BCC_REG);
+	reg_val &= ~SPI_BCC_STC_MASK;
+	reg_val |= (SPI_BCC_STC_MASK & stc_len);
+	reg_val &= ~(0xf << 24);
+	reg_val |= (dummy_cnt << 24);
+	writel(reg_val, V851S_SPI0_BASE + SPI_BCC_REG);
+}
+
+static void spi_disable_dual(feldev_handle *dev)
+{
+	uint32_t reg_val = readl(V851S_SPI0_BASE + SPI_BCC_REG);
+	reg_val &= ~SPI_BCC_DUAL_MODE;
+	writel(reg_val, V851S_SPI0_BASE + SPI_BCC_REG);
+}
+
+static void spi_enable_dual(feldev_handle *dev)
+{
+	uint32_t reg_val = readl(V851S_SPI0_BASE + SPI_BCC_REG);
+	reg_val &= ~SPI_BCC_QUAD_MODE;
+	reg_val |= SPI_BCC_DUAL_MODE;
+	writel(reg_val, V851S_SPI0_BASE + SPI_BCC_REG);
+}
+
+static void spi_disable_quad(feldev_handle *dev)
+{
+	uint32_t reg_val = readl(V851S_SPI0_BASE + SPI_BCC_REG);
+
+	reg_val &= ~SPI_BCC_QUAD_MODE;
+	writel(reg_val, V851S_SPI0_BASE + SPI_BCC_REG);
+}
+
+static void spi_enable_quad(feldev_handle *dev)
+{
+	uint32_t reg_val = readl(V851S_SPI0_BASE + SPI_BCC_REG);
+
+	reg_val |= SPI_BCC_QUAD_MODE;
+	writel(reg_val, V851S_SPI0_BASE + SPI_BCC_REG);
+}
+
+void spi_samp_dl_sw_status(feldev_handle *dev, unsigned int status)
+{
+	unsigned int rval = readl(V851S_SPI0_BASE + SPI_SDC_REG);
+
+	if (status)
+		rval |= SPI_SAMP_DL_SW_EN;
+	else
+		rval &= ~SPI_SAMP_DL_SW_EN;
+
+	writel(rval, V851S_SPI0_BASE +  SPI_SDC_REG);
+}
+
+static void spi_samp_mode(feldev_handle *dev, unsigned int status)
+{
+	unsigned int rval = readl(V851S_SPI0_BASE + SPI_GC_REG);
+
+	if (status)
+		rval |= SPI_SAMP_MODE_EN;
+	else
+		rval &= ~SPI_SAMP_MODE_EN;
+
+	writel(rval, V851S_SPI0_BASE + SPI_GC_REG);
+}
+
+#if 0
+#define SPINOR_OP_READ_1_1_4	0x6b	/* Read data bytes (Quad Output SPI) */
+#define SPINOR_OP_READ_1_1_4_4B	0x6c	/* Read data bytes (Quad Output SPI) */
+#define SPINOR_OP_PP_1_1_4	    0x32	/* Quad page program */
+#define SPINOR_OP_PP_1_1_4_4B	0x34	/* Quad page program */
+#define SPINOR_OP_READ_1_1_2	0x3b	/* Read data bytes (Dual Output SPI) */
+#define SPINOR_OP_READ_1_1_2_4B	0x3c	/* Read data bytes (Dual Output SPI) */
+
+static int sunxi_spi_mode_check(feldev_handle *dev, uint32_t tcnt, uint32_t rcnt, uint8_t cmd)
+{
+	/* single mode transmit counter*/
+	unsigned int stc = 0;
+
+	if (SPINOR_OP_READ_1_1_4 == cmd || SPINOR_OP_READ_1_1_4_4B == cmd ||
+		SPINOR_OP_PP_1_1_4 == cmd || SPINOR_OP_PP_1_1_4_4B == cmd) {
+		/*tcnt is cmd len, use single mode to transmit*/
+		/*rcnt is  the len of recv data, use quad mode to transmit*/
+		stc = tcnt;
+		spi_enable_quad(dev);
+		spi_set_bc_tc_stc(dev, tcnt, rcnt, stc, 0);
+	} else if (SPINOR_OP_READ_1_1_2 == cmd || SPINOR_OP_READ_1_1_2_4B == cmd) {
+		/*tcnt is cmd len, use single mode to transmit*/
+		/*rcnt is  the len of recv data, use dual mode to transmit*/
+		stc = tcnt;
+		spi_enable_dual(dev);
+		spi_set_bc_tc_stc(dev, tcnt, rcnt, stc, 0);
+	} else {
+		/*tcnt is the len of cmd, rcnt is the len of recv data. use single mode to transmit*/
+		stc = tcnt + rcnt;
+		spi_disable_dual(dev);
+		spi_disable_quad(dev);
+		spi_set_bc_tc_stc(dev, tcnt, rcnt, stc, 0);
+	}
+
+	return 0;
+}
+#endif
+
+int spi_xfer(feldev_handle *dev, const uint8_t *tx, size_t tx_len, size_t dummy_len, uint8_t *rx, size_t rx_len)
+{
 	int timeout = 0xfffff;
 
-	unsigned int tcnt = 0, rcnt = 0;
-	static char cmd[16] = {0};
-	static int cmd_len = 0;
-
-	/* Half-duplex only */
-	if (din && dout)
-		return -1;
 	/* No data */
-	if (!din && !dout)
+	if (!tx && !rx)
 		return 0;
-
-	if( (flags & SPI_XFER_BEGIN) && (flags & SPI_XFER_END) ) {
-		printf("xfer begin & end flag\n");
-		memcpy(cmd, dout, len);
-		cmd_len = len;
-		rcnt = 0;
-		tcnt = 0;
-		/*stc = cmd_len; only cmd, no data*/
-	}
-	else if(flags & SPI_XFER_BEGIN) {
-		printf("xfer only begin flag\n");
-		memcpy(cmd, dout, len);
-		cmd_len = len;
-		return 0;
-	} else if(flags & SPI_XFER_END){
-		printf("xfer only end flag\n");
-		tcnt = (dout ? len : 0); /*write cmd*/
-		rcnt = (din ? len : 0);   /*read cmd*/
-		/* stc = cmd_len + len; */
-	}
 
 	spi_disable_irq(dev, 0xffffffff);
 	spi_clr_irq_pending(dev, 0xffffffff);
 
-	//spi_set_bc_tc_stc(tcnt+cmd_len, rcnt, stc, 0, base_addr);
-	//sunxi_spi_mode_check(base_addr, tcnt+cmd_len, rcnt, cmd[0]);
-	//spi_config_tc(sspi, 1, SPI_MODE_3, base_addr);
-	spi_ss_level(dev, 1);
+	spi_set_bc_tc_stc(dev, tx_len, rx_len, tx_len, dummy_len);
+    spi_ss_level(dev, 1);
 	spi_start_xfer(dev);
 
-	/*send cmd*/
-	if(cmd_len) {
-		if(sunxi_spi_cpu_writel(dev, (const void *)cmd, cmd_len))
-			return -1;
-		cmd_len = 0;
-	}
-
-	/* send data */
-	if (tcnt) {
-		if (sunxi_spi_cpu_writel(dev, dout, tcnt))
+	/* tx */
+	if (tx_len) {
+		if (sunxi_spi_cpu_writel(dev, tx, tx_len))
 			return -1;
 	}
-
-	/* recv data */
-	if (rcnt) {
-		if (sunxi_spi_cpu_readl(dev, din, rcnt))
-			return -1;
-	}
-
-	/* check int status error */
-	if (spi_qry_irq_pending(dev) & SPI_INT_STA_ERR) {
-		printf("int stauts error");
-		return -1;
-	}
-
+    
 	/* check tx/rx finish */
-	timeout = 0xfffff;
 	/* wait transfer complete */
 	while (!(spi_qry_irq_pending(dev)&SPI_INT_STA_TC)) {
 		timeout--;
@@ -1393,9 +1517,55 @@ int spi_xfer(feldev_handle *dev, unsigned int bitlen, const void *dout, void *di
 		printf("SPI_MBC Error!\n");
 		return -1;
 	}
+    
+    DBG_INFO("RX FIFO CNT %d\r\n", spi_query_rxfifo(dev));
+    
+	/* check int status error */
+	if (spi_qry_irq_pending(dev) & SPI_INT_STA_ERR) {
+		printf("int status error");
+		return -1;
+	}    
+    
+	/* rx */
+	if (rx_len) {
+		if (sunxi_spi_cpu_readl(dev, rx, rx_len))
+            return -1;
+	}    
+        
 	spi_clr_irq_pending(dev, 0xffffffff);
 
 	return 0;
+}
+
+static void spi_print_info(feldev_handle *dev)
+{
+	char buf[1024] = {0};
+	snprintf(buf, sizeof(buf)-1,
+			"sspi->base_addr = 0x%x, the SPI control register:\n"
+			"[VER]   0x%02x = 0x%08x, [GCR]   0x%02x = 0x%08x, [TCR]   0x%02x = 0x%08x\n"
+			"[IER]   0x%02x = 0x%08x, [ISR]   0x%02x = 0x%08x, [FCR]   0x%02x = 0x%08x\n"
+			"[FSR]   0x%02x = 0x%08x, [WCR]   0x%02x = 0x%08x, [CCR]   0x%02x = 0x%08x\n"
+			"[DCR]   0x%02x = 0x%08x, [BCR]   0x%02x = 0x%08x, [MTC]   0x%02x = 0x%08x\n"
+			"[BCC]   0x%02x = 0x%08x, [BATCR] 0x%02x = 0x%08x, [DMA]   0x%02x = 0x%08x",
+			V851S_SPI0_BASE,
+			SPI_VER_REG, readl(V851S_SPI0_BASE + SPI_VER_REG),
+			SPI_GC_REG, readl(V851S_SPI0_BASE + SPI_GC_REG),
+			SPI_TC_REG, readl(V851S_SPI0_BASE + SPI_TC_REG),
+			SPI_INT_CTL_REG, readl(V851S_SPI0_BASE + SPI_INT_CTL_REG),
+			SPI_INT_STA_REG, readl(V851S_SPI0_BASE + SPI_INT_STA_REG),
+
+			SPI_FIFO_CTL_REG, readl(V851S_SPI0_BASE + SPI_FIFO_CTL_REG),
+			SPI_FIFO_STA_REG, readl(V851S_SPI0_BASE + SPI_FIFO_STA_REG),
+			SPI_WAIT_CNT_REG, readl(V851S_SPI0_BASE + SPI_WAIT_CNT_REG),
+			SPI_CLK_CTL_REG, readl(V851S_SPI0_BASE + SPI_CLK_CTL_REG),
+			SPI_SDC_REG, readl(V851S_SPI0_BASE + SPI_SDC_REG),
+            
+			SPI_BURST_CNT_REG, readl(V851S_SPI0_BASE + SPI_BURST_CNT_REG),
+			SPI_TRANSMIT_CNT_REG, readl(V851S_SPI0_BASE + SPI_TRANSMIT_CNT_REG),
+			SPI_BCC_REG, readl(V851S_SPI0_BASE + SPI_BCC_REG),
+			SPI_BATCR_REG, readl(V851S_SPI0_BASE + SPI_BATCR_REG),
+			SPI_DMA_CTL_REG, readl(V851S_SPI0_BASE + SPI_DMA_CTL_REG));
+			printf("%s\n", buf);
 }
 
 // =============================================================================================
@@ -1563,10 +1733,12 @@ static bool spi0_init(feldev_handle *dev)
 		gpio_set_cfgpin(dev, PC, 4, SUN50I_GPC_SPI0);	/* SPI0_MISO */
 		break;
 	case 0x1886: /* Allwinner V851s */
-		gpio_set_cfgpin(dev, PC, 0, SUN8I_GPC_SPI0);	/* SPI0_CLK */
-		gpio_set_cfgpin(dev, PC, 2, SUN8I_GPC_SPI0);	/* SPI0_MOSI */
-		gpio_set_cfgpin(dev, PC, 1, SUN8I_GPC_SPI0);	/* SPI0_CS0 */
-		gpio_set_cfgpin(dev, PC, 3, SUN8I_GPC_SPI0);	/* SPI0_MISO */
+		gpio_set_cfgpin(dev, PC, 0, SUN8I_GPC_SPI0);	/* SPI0_CLK      */
+		gpio_set_cfgpin(dev, PC, 2, SUN8I_GPC_SPI0);	/* SPI0_MOSI     */
+		gpio_set_cfgpin(dev, PC, 1, SUN8I_GPC_SPI0);	/* SPI0_CS0      */
+		gpio_set_cfgpin(dev, PC, 3, SUN8I_GPC_SPI0);    /* SPI0_MISO/DO  */
+        gpio_set_cfgpin(dev, PC, 4, SUN8I_GPC_SPI0);	/* SPI0_WP/IO2   */
+        gpio_set_cfgpin(dev, PC, 5, SUN8I_GPC_SPI0);	/* SPI0_HOLD/IO3 */
 		break;        
 	default: /* Unknown/Unsupported SoC */
 		printf("SPI support not implemented yet for %x (%s)!\n",
@@ -1574,14 +1746,14 @@ static bool spi0_init(feldev_handle *dev)
 		return false;
 	}
 
-    /* Init V851s SPI clock */
+    /* Init V851s SPI clock (chip = W25N01GVZEIG) */
     if(spi_is_sun8i(dev)) {
         
         /* configure cpu clock */    
         clock_set_corepll(dev, 900);
         /* fix reset circuit detection threshold */
 	    rtc_set_vccio_det_spare(dev);
-        printf("CPU=%d MHz, PLL6=%d Mhz, AHB=%d Mhz, APB1=%dMhz, MBus=%dMhz\n",
+        DBG_INFO("CPU=%d MHz, PLL6=%d Mhz, AHB=%d Mhz, APB1=%dMhz, MBus=%dMhz\n",
 		clock_get_corepll(dev),
 		clock_get_pll6(dev), clock_get_ahb(dev),
 		clock_get_apb1(dev),clock_get_mbus(dev));        
@@ -1596,6 +1768,7 @@ static bool spi0_init(feldev_handle *dev)
             exit(1);
 
         spi_soft_reset(dev);
+        delay();
 
         /* 1. enable the spi module */
         spi_enable_bus(dev);
@@ -1606,22 +1779,47 @@ static bool spi0_init(feldev_handle *dev)
          * 4. set the default frequency	10MHz
          */
         spi_set_master(dev);
-        spi_set_clk(dev, 24000000, sclk_freq, 0); /* SPI clock pin rate */
+        spi_set_clk(dev, 20000000, sclk_freq, 0); /* SPI clock pin rate */
         /* 5. master : set POL,PHA,SSOPL,LMTF,DDB,DHB; default: SSCTL=0,SMC=1,TBW=0.
          * 6. set bit width-default: 8 bits
 	     */
+        //spi_config_batcr(dev); 
 	    spi_ss_level(dev, 1);
         spi_enable_tp(dev);
         /* 7. spi controller sends ss signal automatically */
         spi_ss_owner(dev, 0);
         /* 8. reset fifo */
         spi_reset_fifo(dev);
-
-        /* Test SPI out */
-        static char dout[] = {1,2,3,4};
-        spi_xfer(dev, 4*8, dout, NULL, SPI_XFER_BEGIN | SPI_XFER_END);    
+    
+        spi_print_info(dev);
         
-        printf("SUN8I_SPI0_VER %X\r\n", readl(SUN8I_SPI0_VER));      
+        /*
+         *  [VER] 0x00 = 0x00010001, 
+         *  [GCR] 0x04 = 0x00000083, TP_EN=1, MODE=1, EN=1
+         *  [TCR] 0x08 = 0x00000987, SDC=0, DHB=1, SS_LEVEL=1, SPOL=1, CPOL=0, CPHA=0
+         *  [IER] 0x10 = 0x00000000, 
+         *  [ISR] 0x14 = 0x00000032, 
+         *  [FCR] 0x18 = 0x00200020,
+         *  [FSR] 0x1c = 0x00000000, 
+         *  [WCR] 0x20 = 0x00000000, 
+         *  [CCR] 0x24 = 0x00000302,
+         *  [DCR] 0x28 = 0x00002000, 
+         *  [BCR] 0x30 = 0x00000000, 
+         *  [MTC] 0x34 = 0x00000000,
+         *  [BCC] 0x38 = 0x00000000, 
+         *  [DMA] 0x88 = 0x000000e5,
+         */
+        
+        uint8_t	tx[] = {0x9F, 0x00, 0x00, 0x00, 0x00, 0x00};
+        uint8_t rx[32];
+        
+        // int spi_xfer(feldev_handle *dev, const uint8_t *tx, size_t tx_len, size_t dummy_len, uint8_t *rx, size_t rx_len)
+        spi_xfer(dev, tx, 1, 1, rx, 3);
+        
+        printf("rx[0]= %X\r\n", rx[0]);
+        printf("rx[1]= %X\r\n", rx[1]);
+        printf("rx[2]= %X\r\n", rx[2]);
+        
         exit(1);
 
     } else {
