@@ -1276,14 +1276,34 @@ static void spi_reset_fifo(feldev_handle *dev)
 
 static int sunxi_spi_cpu_writel(feldev_handle *dev, const unsigned char *buf, unsigned int len)
 {
-	unsigned int tx_len = len;	/* number of bytes sent */
 	unsigned char *tx_buf = (unsigned char *)buf;
- 
-	for (; tx_len > 0; --tx_len) {
+    unsigned int i, word_cnt, rbyte_cnt;
+    uint32_t data;
+    unsigned char *pdata = (unsigned char *)&data;
+    
+    word_cnt = len / 4;
+    rbyte_cnt = len % 4;    
+    
+    if(word_cnt) {
+        for(i = 0; i < word_cnt; i++){
+            pdata[0] = *tx_buf++;
+            pdata[1] = *tx_buf++;
+            pdata[2] = *tx_buf++;
+            pdata[3] = *tx_buf++;
+            /* wait for TX fifo ready */
+            while(!(readl(V851S_SPI0_BASE + SPI_INT_STA_REG) & SPI_INT_STA_TX_RDY));
+            writel(data, V851S_SPI0_BASE + SPI_TXDATA_REG);  
+        }
+    }        
+        
+    if(rbyte_cnt) {
+        for(i = 0; i < rbyte_cnt; i++){
+            pdata[i] = *tx_buf++;
+        }
         /* wait for TX fifo ready */
         while(!(readl(V851S_SPI0_BASE + SPI_INT_STA_REG) & SPI_INT_STA_TX_RDY));
-		writel(*tx_buf++, V851S_SPI0_BASE + SPI_TXDATA_REG);
-	}
+		writel(data, V851S_SPI0_BASE + SPI_TXDATA_REG);        
+    }
     
 	return 0;
 }
@@ -1478,6 +1498,7 @@ static int sunxi_spi_mode_check(feldev_handle *dev, uint32_t tcnt, uint32_t rcnt
 int spi_xfer(feldev_handle *dev, const uint8_t *tx, size_t tx_len, size_t dummy_len, uint8_t *rx, size_t rx_len)
 {
 	int timeout = 0xfffff;
+    uint32_t redundant_txfifo;
 
 	/* No data */
 	if (!tx && !rx)
@@ -1533,7 +1554,15 @@ int spi_xfer(feldev_handle *dev, const uint8_t *tx, size_t tx_len, size_t dummy_
 		if (sunxi_spi_cpu_readl(dev, rx, rx_len))
             return -1;
 	}    
-        
+       
+    /* check if having redundant TXFIO entry */
+    redundant_txfifo = spi_query_txfifo(dev);
+    
+    if(redundant_txfifo) {
+        DBG_INFO("redundant txfifo cnt %d\r\n", redundant_txfifo);
+        spi_reset_fifo(dev); 
+    }
+       
 	spi_clr_irq_pending(dev, 0xffffffff);
 
 	return 0;
@@ -1812,7 +1841,7 @@ static bool spi0_init(feldev_handle *dev)
          *  [DMA] 0x88 = 0x000000e5,
          */
         
-        uint8_t	tx[] = {0x9F, 0x00, 0x00, 0x00, 0x00, 0x00};
+        uint8_t	tx[] = {0x9F, 0x11, 0x22, 0x33, 0x44, 0x00};
         uint8_t rx[32];
         
         memset(rx, 0x00, 32);
