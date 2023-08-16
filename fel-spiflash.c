@@ -1777,7 +1777,7 @@ static bool spi0_init(feldev_handle *dev)
 		return false;
 	}
 
-    /* Init V851s SPI clock (chip = W25N01GVZEIG) */
+    /* Init V851s SPI clock (chip = F35SQA001G) */
     if(spi_is_sun8i(dev)) {
         
         /* configure cpu clock */    
@@ -1821,7 +1821,9 @@ static bool spi0_init(feldev_handle *dev)
         spi_ss_owner(dev, 0);
         /* 8. reset fifo */
         spi_reset_fifo(dev);
-    
+
+/* For debuging purpose only */        
+#if 1    
         spi_print_info(dev);
         
         /*
@@ -1840,19 +1842,37 @@ static bool spi0_init(feldev_handle *dev)
          *  [BCC] 0x38 = 0x00000000, 
          *  [DMA] 0x88 = 0x000000e5,
          */
-        
-        uint8_t	tx[] = {0x9F, 0x11, 0x22, 0x33, 0x44, 0x00};
+       
+        uint8_t	tx[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
         uint8_t rx[32];
-        
+        int i;
+      
+        // Read status
+        //tx[0] = 0x0F;
+        //tx[1] = 0xC0;  // Protect 0xA0, Config 0xB0, Status 0xC0   
+        //memset(rx, 0x00, 32);
+        //spi_xfer(dev, tx, 2, 0, rx, 1);
+        //printf("Status register = %X\r\n", rx[0]);
+      
+        // Page read 0x13 (read to cache)    
+        tx[0] = 0x13;
+        tx[1] = 0x00; // Dummy
+        tx[2] = 0x00; // PA[15-8]
+        tx[3] = 0x00; // PA[7-0]
+        spi_xfer(dev, tx, 4, 0, NULL, 0);
+        delay();
+        delay();
+  
+        // Read from cache 0x03
+        tx[0] = 0x3;
+        tx[1] = 0x00; // CA[15-8]
+        tx[2] = 0x00; // CA[7-0]
         memset(rx, 0x00, 32);
-        
-        // int spi_xfer(feldev_handle *dev, const uint8_t *tx, size_t tx_len, size_t dummy_len, uint8_t *rx, size_t rx_len)
-        spi_xfer(dev, tx, 1, 1, rx, 3);
-        
-        printf("rx[0]= %X\r\n", rx[0]);
-        printf("rx[1]= %X\r\n", rx[1]);
-        printf("rx[2]= %X\r\n", rx[2]);
-        
+        spi_xfer(dev, tx, 3, 1, rx, 16);
+        for (i = 0; i < 16; i++){
+            printf("rx[%d]= %X\r\n", i, rx[i]);
+        }       
+#endif            
         exit(1);
 
     } else {
