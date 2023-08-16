@@ -2231,6 +2231,62 @@ void aw_fel_spiflash_write(feldev_handle *dev,
  */
 void aw_fel_spiflash_info(feldev_handle *dev)
 {
+
+/* Test read data from cache */    
+#if 1 
+    soc_info_t *soc_info = dev->soc_info;
+    void *buf;
+    uint8_t *buf8;
+    uint32_t i;
+	void *backup = backup_sram(dev);
+
+	if (!spi0_init(dev))
+		return;
+
+    /*          buf[4] buf[5]  buf[6] buf[7] ...
+     * command: 0x03   CA15-8  CA7-0  Dummy  D0 D1 D2...
+     * txlen = 4
+     * rxlen = 3072 [0xC00] (3K bytes)
+     * 
+     * total len = 4 + 4 + 3072 = 3080
+     */    
+    
+    #define TXLEN    (4)
+    #define RXLEN    (2048) 
+    #define BUF_SIZE (4 + TXLEN + RXLEN)
+    
+    buf = malloc(BUF_SIZE);
+
+    if(buf == NULL) {
+        printf("Error memory\r\n");
+        return;
+    }
+    
+    buf8 = (uint8_t *)buf;
+    
+    buf8[0] = TXLEN & 0xFF;
+    buf8[1] = TXLEN >> 8;
+    buf8[2] = RXLEN & 0xFF;
+    buf8[3] = RXLEN >> 8;
+    buf8[4] = 0x03;
+    buf8[5] = 0x00;
+    buf8[6] = 0x00;
+    
+	aw_fel_write(dev, buf, soc_info->spl_addr, BUF_SIZE);
+	prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
+	aw_fel_remotefunc_execute(dev, NULL);
+	aw_fel_read(dev, soc_info->spl_addr, buf, BUF_SIZE);
+
+    buf8 = &buf8[4 + TXLEN];
+    
+    for(i=0; i<RXLEN; i++) {
+        printf("rx[%d] = %X\r\n", i, buf8[i]);
+    }
+    
+	restore_sram(dev, backup);
+    free(buf);
+    
+#else    
 	soc_info_t *soc_info = dev->soc_info;
 	const char *manufacturer;
     /* F35SQA001G JEDEC CMD 0x9F Dummy MID DID DID */
@@ -2278,6 +2334,7 @@ void aw_fel_spiflash_info(feldev_handle *dev)
 
 	printf("Manufacturer: %s (%02Xh), model: %02Xh, size: %d bytes.\n",
 	       manufacturer, buf[6], buf[7], (buf[3] << 8) | buf[2]);
+#endif           
 }
 
 /*
