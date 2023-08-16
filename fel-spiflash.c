@@ -2236,12 +2236,14 @@ void aw_fel_spiflash_info(feldev_handle *dev)
 #if 1 
     soc_info_t *soc_info = dev->soc_info;
     void *buf;
-    uint8_t *buf8;
+    uint8_t *buf8, *rxbuf, *txbuf;
     uint32_t i;
 	void *backup = backup_sram(dev);
 
 	if (!spi0_init(dev))
 		return;
+
+    prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
 
     /*          buf[4] buf[5]  buf[6] buf[7] ...
      * command: 0x03   CA15-8  CA7-0  Dummy  D0 D1 D2...
@@ -2262,27 +2264,46 @@ void aw_fel_spiflash_info(feldev_handle *dev)
         return;
     }
     
+    /* prepare tx,rx len info */
     buf8 = (uint8_t *)buf;
-    
     buf8[0] = TXLEN & 0xFF;
     buf8[1] = TXLEN >> 8;
     buf8[2] = RXLEN & 0xFF;
     buf8[3] = RXLEN >> 8;
-    buf8[4] = 0x03;
-    buf8[5] = 0x00;
-    buf8[6] = 0x00;
     
+    txbuf = &buf8[4];
+    rxbuf = &buf8[4 + TXLEN];
+    
+    /* read cache command */
+    txbuf[0] = 0x03;
+    txbuf[1] = 0x00; /* Read page 0 */
+    txbuf[2] = 0x00;
+    txbuf[3] = 0x00; /* dummy */
+        
 	aw_fel_write(dev, buf, soc_info->spl_addr, BUF_SIZE);
-	prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
 	aw_fel_remotefunc_execute(dev, NULL);
 	aw_fel_read(dev, soc_info->spl_addr, buf, BUF_SIZE);
-
-    buf8 = &buf8[4 + TXLEN];
     
+    printf("Read page 0:\r\n");
     for(i=0; i<RXLEN; i++) {
-        printf("rx[%d] = %X\r\n", i, buf8[i]);
+        printf("rxbuf[%d] = %X\r\n", i, rxbuf[i]);
     }
     
+    /* read cache command */
+    txbuf[0] = 0x03;
+    txbuf[1] = 0x01; /* Read page 1 */
+    txbuf[2] = 0x00;
+    txbuf[3] = 0x00; /* dummy */
+        
+	aw_fel_write(dev, buf, soc_info->spl_addr, BUF_SIZE);
+	aw_fel_remotefunc_execute(dev, NULL);
+	aw_fel_read(dev, soc_info->spl_addr, buf, BUF_SIZE);
+    
+    printf("Read page 1:\r\n");
+    for(i=0; i<RXLEN; i++) {
+        printf("rxbuf[%d] = %X\r\n", i, rxbuf[i]);
+    }  
+      
 	restore_sram(dev, backup);
     free(buf);
     
