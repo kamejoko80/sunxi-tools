@@ -32,6 +32,15 @@
  
  - Reset YuzukiHD board, jtag-loop will be executed and LED1 will be on. 
  - Note: I have tried to configure JTAG on PH but unfortunately it doesn't work, currently JTAG works only with PF
+
+# How to generate fel-remotefunc-spi-data-transfer-v851s.h ?
+
+ - Install ruby on Windows (using rubyinstaller-devkit-3.2.2-1-x64.exe) 
+ - On Windows bat shell execute the below command:
+ 
+ ```
+   > ruby fel-remotefunc-compiler-v851s.rb fel-remotefunc-spi-data-transfer-v851s.c fel-remotefunc-spi-data-transfer-v851s.h
+ ``` 
  
 ## License
 This software is licensed under the terms of GPLv2+ as defined by the

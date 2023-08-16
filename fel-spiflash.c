@@ -23,7 +23,7 @@
 #include "fel_lib.h"
 #include "progress.h"
 
-#include "fel-remotefunc-spi-data-transfer.h"
+#include "fel-remotefunc-spi-data-transfer-v851s.h"
 
 /*****************************************************************************/
 
@@ -632,7 +632,8 @@ void fel_writel(feldev_handle *dev, uint32_t addr, uint32_t val);
 #define V851S_SRC_GATE_RST          (0x02001000 + 0x093C)      
 #define V851S_SPIF_CLK_CFG          (0x02001000 + 0x0950)   
 #define V851S_SPI_GATE_RST          (0x02001000 + 0x096C)
-  
+
+/* SPI0 controller */  
 #define SUN8I_SPI0_VER              (spi_base(dev) + 0x0000) // SPI Version Register 
 #define SUN8I_SPI0_GCR              (spi_base(dev) + 0x0004) // SPI Global Control Register
 #define SUN8I_SPI0_TCR              (spi_base(dev) + 0x0008) // SPI Transfer Control Register
@@ -652,6 +653,9 @@ void fel_writel(feldev_handle *dev, uint32_t addr, uint32_t val);
 #define SUN8I_SPI0_NDMA_MODE_CTL    (spi_base(dev) + 0x0088) // SPI Normal DMA Mode Control Register
 #define SUN8I_SPI0_TXD              (spi_base(dev) + 0x0200) // SPI TX Data Register
 #define SUN8I_SPI0_RXD              (spi_base(dev) + 0x0300) // SPI RX Data Register
+
+/* SPI0 bit field */
+#define SUN8I_TCR_XCH		        (0x1 << 31)
 
 #define CCM_SPI0_CLK_DIV_BY_2       (0x1000)
 #define CCM_SPI0_CLK_DIV_BY_4       (0x1001)
@@ -1823,7 +1827,13 @@ static bool spi0_init(feldev_handle *dev)
         spi_reset_fifo(dev);
 
 /* For debuging purpose only */        
-#if 1    
+#if 0    
+        printf("soc_info->name         %s\r\n", soc_info->name);
+        printf("soc_info->spl_addr     %X\r\n", soc_info->spl_addr);
+        printf("soc_info->scratch_addr %X\r\n", soc_info->scratch_addr);
+        printf("soc_info->sram_size    %d\r\n", soc_info->sram_size);
+        
+        /* SPI register info */
         spi_print_info(dev);
         
         /*
@@ -1871,9 +1881,10 @@ static bool spi0_init(feldev_handle *dev)
         spi_xfer(dev, tx, 3, 1, rx, 16);
         for (i = 0; i < 16; i++){
             printf("rx[%d]= %X\r\n", i, rx[i]);
-        }       
-#endif            
+        }
+
         exit(1);
+#endif            
 
     } else {
         if (soc_is_h6_style(dev)) {
@@ -1955,9 +1966,46 @@ static void restore_sram(feldev_handle *dev, void *buf)
 	free(buf);
 }
 
+#define SUN8I_SPI0_VER              (spi_base(dev) + 0x0000) // SPI Version Register 
+#define SUN8I_SPI0_GCR              (spi_base(dev) + 0x0004) // SPI Global Control Register
+#define SUN8I_SPI0_TCR              (spi_base(dev) + 0x0008) // SPI Transfer Control Register
+#define SUN8I_SPI0_IER              (spi_base(dev) + 0x0010) // SPI Interrupt Control Register
+#define SUN8I_SPI0_ISR              (spi_base(dev) + 0x0014) // SPI Interrupt Status Register
+#define SUN8I_SPI0_FCR              (spi_base(dev) + 0x0018) // SPI FIFO Control Register
+#define SUN8I_SPI0_FSR              (spi_base(dev) + 0x001C) // SPI FIFO Status Register
+#define SUN8I_SPI0_WCR              (spi_base(dev) + 0x0020) // SPI Wait Clock Register
+#define SUN8I_SPI0_SAMP_DL          (spi_base(dev) + 0x0028) // SPI Sample Delay Control Register
+#define SUN8I_SPI0_MBC              (spi_base(dev) + 0x0030) // SPI Master Burst Counter Register
+#define SUN8I_SPI0_MTC              (spi_base(dev) + 0x0034) // SPI Master Transmit Counter Register
+#define SUN8I_SPI0_BCC              (spi_base(dev) + 0x0038) // SPI Master Burst Control Register
+#define SUN8I_SPI0_BATCR            (spi_base(dev) + 0x0040) // SPI Bit-Aligned Transfer Configure Register
+#define SUN8I_SPI0_BA_CCR           (spi_base(dev) + 0x0044) // SPI Bit-Aligned Clock Configuration Register
+#define SUN8I_SPI0_TBR              (spi_base(dev) + 0x0048) // SPI TX Bit Register
+#define SUN8I_SPI0_RBR              (spi_base(dev) + 0x004C) // SPI RX Bit Register
+#define SUN8I_SPI0_NDMA_MODE_CTL    (spi_base(dev) + 0x0088) // SPI Normal DMA Mode Control Register
+#define SUN8I_SPI0_TXD              (spi_base(dev) + 0x0200) // SPI TX Data Register
+#define SUN8I_SPI0_RXD              (spi_base(dev) + 0x0300) // SPI RX Data Register
+
+
+
 static void prepare_spi_batch_data_transfer(feldev_handle *dev, uint32_t buf)
 {
-	if (spi_is_sun6i(dev)) {
+    if(spi_is_sun8i(dev)) {
+		aw_fel_remotefunc_prepare_spi_batch_data_transfer(dev,
+							    buf,
+							    SUN8I_SPI0_TCR,
+							    SUN8I_TCR_XCH,
+                                SUN8I_SPI0_ISR,
+							    SUN8I_SPI0_FSR,
+							    SUN8I_SPI0_TXD,
+							    SUN8I_SPI0_RXD,
+							    SUN8I_SPI0_MBC,
+							    SUN8I_SPI0_MTC,
+							    SUN8I_SPI0_BCC);
+    }
+    
+#if 0 /* disable */    
+    if (spi_is_sun6i(dev)) {
 		aw_fel_remotefunc_prepare_spi_batch_data_transfer(dev,
 							    buf,
 							    SUN6I_SPI0_TCR,
@@ -1980,6 +2028,8 @@ static void prepare_spi_batch_data_transfer(feldev_handle *dev, uint32_t buf)
 							    SUN4I_SPI0_TC,
 							    0);
 	}
+#endif
+    
 }
 
 /*
@@ -2163,18 +2213,38 @@ void aw_fel_spiflash_write(feldev_handle *dev,
 }
 
 /*
+ * Because previous implementation is very complicated so for V851S 
+ * we will implement in a different way, the working buffer(spl_addr) 
+ * layout is organized as below: 
+ *
+ * | byte 0 | byte 1 | byte 2 | byte 3 |...........|.........| 
+ *  \_______________/ \_______________/ \_________/ \________/       
+ *          |                  |             |          | 
+ *        txlen              rxlen         txbuf      rxbuf
+ *
+ *  Where: total len = 4 + txlen + rxlen <= spl ram size (4096)
+ *     
+ */
+
+/*
  * Use the read JEDEC ID (9Fh) command.
  */
 void aw_fel_spiflash_info(feldev_handle *dev)
 {
 	soc_info_t *soc_info = dev->soc_info;
 	const char *manufacturer;
-	unsigned char buf[] = { 0, 4, 0x9F, 0, 0, 0, 0x0, 0x0 };
+    /* F35SQA001G JEDEC CMD 0x9F Dummy MID DID DID */
+	unsigned char buf[] = { 2, 0, 3, 0, 0x9F, 0, 0x00, 0x00, 0x00 };
 	void *backup = backup_sram(dev);
 
 	if (!spi0_init(dev))
 		return;
-
+    
+    //printf("soc_info->name         %s\r\n", soc_info->name);
+    //printf("soc_info->spl_addr     %X\r\n", soc_info->spl_addr);
+    //printf("soc_info->scratch_addr %X\r\n", soc_info->scratch_addr);
+    //printf("soc_info->sram_size    %d\r\n", soc_info->sram_size);
+    
 	aw_fel_write(dev, buf, soc_info->spl_addr, sizeof(buf));
 	prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
 	aw_fel_remotefunc_execute(dev, NULL);
@@ -2183,12 +2253,12 @@ void aw_fel_spiflash_info(feldev_handle *dev)
 	restore_sram(dev, backup);
 
 	/* Assume that the MISO pin is either pulled up or down */
-	if (buf[5] == 0x00 || buf[5] == 0xFF) {
+	if (buf[6] == 0x00 || buf[6] == 0xFF) {
 		printf("No SPI flash detected.\n");
 		return;
 	}
 
-	switch (buf[3]) {
+	switch (buf[6]) {
 	case 0xEF:
 		manufacturer = "Winbond";
 		break;
@@ -2198,13 +2268,16 @@ void aw_fel_spiflash_info(feldev_handle *dev)
 	case 0x1C:
 		manufacturer = "Eon";
 		break;
+	case 0xCD:
+		manufacturer = "Foresee";
+		break;        
 	default:
 		manufacturer = "Unknown";
 		break;
 	}
 
 	printf("Manufacturer: %s (%02Xh), model: %02Xh, size: %d bytes.\n",
-	       manufacturer, buf[3], buf[4], (1U << buf[5]));
+	       manufacturer, buf[6], buf[7], (buf[3] << 8) | buf[2]);
 }
 
 /*
