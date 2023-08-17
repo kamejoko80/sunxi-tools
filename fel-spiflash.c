@@ -1880,7 +1880,6 @@ static bool spi0_init(feldev_handle *dev)
         tx[3] = 0x00; // PA[7-0]
         spi_xfer(dev, tx, 4, 0, NULL, 0);
         delay();
-        delay();
 
         // Read from cache 0x03
         tx[0] = 0x3;
@@ -2046,6 +2045,14 @@ static void prepare_spi_batch_data_transfer(feldev_handle *dev, uint32_t buf)
 #define CMDRXLEN             (F35SQA001G_PAGE_SIZE)
 #define CMDBUF_SIZE          (4 + CMDTXLEN + CMDRXLEN)
 
+#define SR1_ADDR (0xA0) /* Protection register */ 
+#define SR2_ADDR (0xB0) /* Configuration register */
+#define SR3_ADDR (0xC0) /* Status register */
+#define SR4_ADDR (0x80) /* Sector 0 ECC */
+#define SR5_ADDR (0x84) /* Sector 1 ECC */
+#define SR6_ADDR (0x88) /* Sector 2 ECC */
+#define SR6_ADDR (0x8C) /* Sector 3 ECC */
+
 /*
  * Read spi flash cache
  */
@@ -2153,7 +2160,7 @@ void aw_fel_spiflash_read(feldev_handle *dev,
         /* reach to cache */
         aw_fel_spiflash_read_to_cache(dev, page_addr);
 
-        /* execure spi */
+        /* read data from cache */
         aw_fel_write(dev, cmdbuf, soc_info->spl_addr, CMDBUF_SIZE);
         aw_fel_remotefunc_execute(dev, NULL);
         aw_fel_read(dev, soc_info->spl_addr, cmdbuf, CMDBUF_SIZE);
@@ -2191,33 +2198,256 @@ void aw_fel_spiflash_read(feldev_handle *dev,
 }
 
 /*
- * Erase blocks of SPI flash memory
- * This function must be called in aw_fel_spiflash_write()'s context
+ * Write enable command
  */
-static void aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t offset, size_t block_cnt)
+static void aw_fel_spiflash_write_enable(feldev_handle *dev)
+{
+    soc_info_t *soc_info = dev->soc_info;
+
+    /* write enable command: 0x06 */
+    uint8_t cmdbuf[] = { 1, 0, 0, 0, 0x06};
+
+    /* execure spi */
+    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
+    aw_fel_remotefunc_execute(dev, NULL);    
+}
+
+/*
+ * Read status command
+ */  
+static uint8_t aw_fel_spiflash_read_status(feldev_handle *dev, uint8_t sta_addr)
+{
+    soc_info_t *soc_info = dev->soc_info;
+
+    /* get feature command: 0x0F sta_addr S7-0 */
+    uint8_t cmdbuf[] = { 2, 0, 1, 0, 0x0F, 0x00, 0x00};
+    
+    /* prepare command */
+    cmdbuf[5] = sta_addr;
+    
+    /* execure spi */
+    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
+    aw_fel_remotefunc_execute(dev, NULL);
+    aw_fel_read(dev, soc_info->spl_addr, cmdbuf, sizeof(cmdbuf));
+
+    return cmdbuf[6];   
+}
+
+/*
+ * Write status command
+ */ 
+static void aw_fel_spiflash_write_status(feldev_handle *dev, uint8_t sta_addr, uint8_t value)
+{
+    soc_info_t *soc_info = dev->soc_info;
+
+    /* set feature command: 0x1F sta_addr S7-0 */
+    uint8_t cmdbuf[] = { 3, 0, 0, 0, 0x1F, 0x00, 0x00};
+    
+    /* prepare command */
+    cmdbuf[5] = sta_addr;
+    cmdbuf[6] = value;
+    
+    /* execure spi */
+    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
+    aw_fel_remotefunc_execute(dev, NULL); 
+}
+
+/*
+ * Wait for SPI flash operation
+ */  
+static uint8_t aw_fel_spiflash_wait_for_busy(feldev_handle *dev)
+{
+    uint8_t status;
+    
+    do {
+        delay();
+        status = aw_fel_spiflash_read_status(dev, SR3_ADDR);
+        if(status & 0x8){
+            printf("Warning! P-FAIL occured\r\n");
+        }
+        if(status & 0x4){
+            printf("Warning! E-FAIL occured\r\n");
+        }        
+    } while(status & 0x1); 
+}
+
+
+/*
+ * read data from cache (for debuging only)
+ */  
+static void aw_fel_spiflash_read_from_cache(feldev_handle *dev)
+{
+    soc_info_t *soc_info = dev->soc_info;
+    
+    /*           [4]     [5]    [6]    [7] ...
+     * command: 0x03   CA15-8  CA7-0  Dummy  D0 D1 D2...
+     * txlen = 4
+     * rxlen = 2048 [0x800] (2K bytes)
+     *
+     * total len = 4 + 4 + 2048 = 2056
+     */
+     
+    size_t txlen = 4, rxlen = 2048;
+    size_t cmdbuf_size = 4 + txlen + rxlen;     
+    uint8_t *cmdbuf8, *rxbuf, *txbuf;
+    void *cmdbuf = malloc(cmdbuf_size);
+
+    if(cmdbuf == NULL) {
+        printf("Error memory\r\n");
+        return;
+    }  
+  
+    /* prepare tx,rx len info */
+    cmdbuf8 = (uint8_t *)cmdbuf;
+    cmdbuf8[0] = txlen & 0xff;
+    cmdbuf8[1] = (txlen >> 8) & 0xff;
+    cmdbuf8[2] = rxlen & 0xff;
+    cmdbuf8[3] = (rxlen >> 8) & 0xff;
+
+    /* txbuf, rxbuf */
+    txbuf = &cmdbuf8[4];
+    rxbuf = &cmdbuf8[4 + txlen];  
+  
+    /* read from cache command */
+    txbuf[0] = 0x03;
+    txbuf[1] = 0x00; /* CA15-8 */
+    txbuf[2] = 0x00; /* CA7-0 */
+    txbuf[3] = 0x00; /* dummy */  
+    
+    /* read data from cache */
+    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, cmdbuf_size);
+    aw_fel_remotefunc_execute(dev, NULL);
+    aw_fel_read(dev, soc_info->spl_addr, cmdbuf, cmdbuf_size);    
+    
+    /* print data from cache */
+    for(int i=0; i < rxlen; i++) {
+        printf("rxbuf[%d] = %X\r\n", i, rxbuf[i]);
+    }
+
+    /* free memory */
+    free(cmdbuf);     
+}
+
+/*
+ * Load program data
+ */  
+static void aw_fel_spiflash_program_data_load(feldev_handle *dev, uint8_t *buf, size_t len)
+{
+    soc_info_t *soc_info = dev->soc_info;
+    
+    if(len > F35SQA001G_PAGE_SIZE){
+        printf("Warning! len exceeds memory page size %d\r\n", F35SQA001G_PAGE_SIZE);
+        len = F35SQA001G_PAGE_SIZE;
+    }
+    
+    /* 
+     * load program data cmd format: 0x2 CA15-8 CA7-0 D0 D1 D2... 
+     * buffer structure:
+     *   txlen = 3 + page_size
+     *   rxlen = 0      
+     *   {txlen_L, txlen_H, 0, 0, 0x2, CA15-8, CA7-0, D0, D1, D2...}    
+     *   cmdbuff size = 4 + txlen 
+     */
+    
+    size_t txlen = 3 + F35SQA001G_PAGE_SIZE;     
+    size_t cmdbuf_size = 4 + txlen;
+    void *cmdbuf = malloc(cmdbuf_size);
+  
+    if(cmdbuf == NULL) {
+        printf("Error memory\r\n");
+        return;
+    }
+    
+    /* reset memory */
+    memset(cmdbuf, 0x00, cmdbuf_size);
+    
+    /* prepare command */
+    uint8_t *cmdbuf8 = (uint8_t *)cmdbuf;
+    cmdbuf8[0] = txlen & 0xff;
+    cmdbuf8[1] = (txlen >> 8) & 0xff;
+    cmdbuf8[2] = 0;
+    cmdbuf8[3] = 0;
+    cmdbuf8[4] = 0x2; /* load program data */
+    cmdbuf8[5] = 0;   /* always write entire page */
+    cmdbuf8[6] = 0;
+    /* load data */
+    memcpy((void *)&cmdbuf8[7], (void *)buf, len);
+        
+    printf("execute command load data\r\n");
+    
+    /* Execute command */
+    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, cmdbuf_size);
+    aw_fel_remotefunc_execute(dev, NULL);
+    
+    delay();
+    
+    /* print data in cache (debugging) */
+    aw_fel_spiflash_read_from_cache(dev);
+    
+    /* free memory */
+    free(cmdbuf); 
+}
+
+/*
+ * Erase blocks of SPI flash memory
+ */
+static int aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t page_addr, size_t block_cnt)
 {
     soc_info_t *soc_info = dev->soc_info;
     spi_flash_info_t *flash_info = &f35sqa001g_spi_flash_info;
-
+    uint8_t status;
+    
+    /* read protect status register */
+    status = aw_fel_spiflash_read_status(dev, SR1_ADDR);
+    //printf("Protection status before = %X\r\n", status);
+    
+    status &= 0x87; /* clear BP3-0, unprotect all blocks */
+    aw_fel_spiflash_write_status(dev, SR1_ADDR, status);
+    status = aw_fel_spiflash_read_status(dev, SR1_ADDR);    
+    //printf("Protection status after = %X\r\n", status);
+    
+    /* write enable */
+    aw_fel_spiflash_write_enable(dev);
+    
+    /* read status and check WEL bit */
+    status = aw_fel_spiflash_read_status(dev, SR3_ADDR);
+    
+    if(!(status & 0x2)) {
+        printf("Error! WEL bit is not set\r\n");
+        return -1;
+    }
+    
+    printf("start to erase block\r\n");
+    
     /* Block erase command: 0xd8 dummy PA15-8 PA7-0 */
     uint8_t cmdbuf[] = { 4, 0, 0, 0, 0x00, 0, 0x00, 0x00};
 
     /* block erase cmd */
     cmdbuf[4] = flash_info->large_erase_cmd;
-    //cmdbuf[6] =
-
+    cmdbuf[5] = 0x0; /* dummy */
+    
     while(block_cnt){
+
+        printf("Erase lock PA = %X\r\n", page_addr);
+    
+        /* prepare page addr parameter */
+        cmdbuf[6] = (page_addr >> 8) & 0xf;;
+        cmdbuf[7] = page_addr & 0xf;
 
         /* Execute command */
         aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
         aw_fel_remotefunc_execute(dev, NULL);
 
+        /* wait for busy flag */
+        aw_fel_spiflash_wait_for_busy(dev);
+        
+        /* update page addr and block count */
+        page_addr += 64;
         block_cnt--;
     }
-
-
+    
+    return 0;
 }
-
 
 /*
  * Write data to the SPI flash. Use the first 4KiB of SRAM as the data buffer.
@@ -2300,10 +2530,24 @@ void aw_fel_spiflash_write(feldev_handle *dev,
 			   uint32_t offset, void *buf, size_t len,
 			   progress_cb_t progress)
 {
-#if 0
+#if 1
+    soc_info_t *soc_info = dev->soc_info;
+    void *backup = backup_sram(dev);
+    
+	if (!spi0_init(dev))
+		return;
 
-    f35sqa001g_spi_flash_info;
+    prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
+    
+    /* test erase block 0 */
+    //aw_fel_spiflash_erase_block(dev, 0, 1);
 
+    /* test cache */
+    // static void aw_fel_spiflash_program_data_load(feldev_handle *dev, uint8_t *buf, size_t len);
+    uint8_t buffer[] = {0xAA, 0x55, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
+    aw_fel_spiflash_program_data_load(dev, buffer, sizeof(buffer));
+        
+    restore_sram(dev, backup);    
 #else
 
 	void *backup = backup_sram(dev);
@@ -2376,7 +2620,7 @@ void aw_fel_spiflash_info(feldev_handle *dev)
 {
 
 /* Test read data from cache */
-#if 0
+#if 1
     soc_info_t *soc_info = dev->soc_info;
     void *buf;
     uint8_t *buf8, *rxbuf, *txbuf;
