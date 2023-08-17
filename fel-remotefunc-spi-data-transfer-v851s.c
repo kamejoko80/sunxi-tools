@@ -24,25 +24,25 @@
 typedef unsigned int  u32;
 typedef unsigned char u8;
 
-#define readl(addr)      (*((volatile u32 *)(addr)))
-#define writel(v, addr)  (*((volatile u32 *)(addr)) = (u32)(v))
-#define readb(addr)      (*((volatile u8 *)(addr)))
-#define writeb(v, addr)  (*((volatile u8 *)(addr)) = (u8)(v))
+#define readl(addr)         (*((volatile u32 *)(addr)))
+#define writel(v, addr)     (*((volatile u32 *)(addr)) = (u32)(v))
+#define readb(addr)         (*((volatile u8 *)(addr)))
+#define writeb(v, addr)     (*((volatile u8 *)(addr)) = (u8)(v))
 
 #define SPI_BCC_STC_MASK    (0xFFFFFF << 0) /* master single mode transmit counter */
-#define SPI_INT_STA_RX_RDY    (0x1 <<  0) /* rxFIFO ready, 0:RX_WL < RX_TRIG_LEVEL,1:RX_WL >= RX_TRIG_LEVEL */
-#define SPI_INT_STA_RX_EMP    (0x1 <<  1) /* rxFIFO empty, this bit is set when rxFIFO is empty */
-#define SPI_INT_STA_RX_FULL    (0x1 <<  2) /* rxFIFO full, this bit is set when rxFIFO is full */
-#define SPI_INT_STA_TX_RDY    (0x1 <<  4) /* txFIFO ready, 0:TX_WL > TX_TRIG_LEVEL,1:TX_WL <= TX_TRIG_LEVEL */
-#define SPI_INT_STA_TX_EMP    (0x1 <<  5) /* txFIFO empty, this bit is set when txFIFO is empty */
-#define SPI_INT_STA_TX_FULL    (0x1 <<  6) /* txFIFO full, this bit is set when txFIFO is full */
-#define SPI_INT_STA_RX_OVF    (0x1 <<  8) /* rxFIFO overflow, when set rxFIFO has overflowed */
-#define SPI_INT_STA_RX_UDR    (0x1 <<  9) /* rxFIFO underrun, when set rxFIFO has underrun */
-#define SPI_INT_STA_TX_OVF    (0x1 << 10) /* txFIFO overflow, when set txFIFO has overflowed */
-#define SPI_INT_STA_TX_UDR    (0x1 << 11) /* fxFIFO underrun, when set txFIFO has underrun */
-#define SPI_INT_STA_TC        (0x1 << 12) /* Transfer Completed */
-#define SPI_INT_STA_SSI        (0x1 << 13) /* SS invalid interrupt, when set SS has changed from valid to invalid */
-#define SPI_INT_STA_ERR        (SPI_INT_STA_TX_OVF | SPI_INT_STA_RX_UDR | SPI_INT_STA_RX_OVF) /* NO txFIFO underrun */
+#define SPI_INT_STA_RX_RDY  (0x1 <<  0) /* rxFIFO ready, 0:RX_WL < RX_TRIG_LEVEL,1:RX_WL >= RX_TRIG_LEVEL */
+#define SPI_INT_STA_RX_EMP  (0x1 <<  1) /* rxFIFO empty, this bit is set when rxFIFO is empty */
+#define SPI_INT_STA_RX_FULL (0x1 <<  2) /* rxFIFO full, this bit is set when rxFIFO is full */
+#define SPI_INT_STA_TX_RDY  (0x1 <<  4) /* txFIFO ready, 0:TX_WL > TX_TRIG_LEVEL,1:TX_WL <= TX_TRIG_LEVEL */
+#define SPI_INT_STA_TX_EMP  (0x1 <<  5) /* txFIFO empty, this bit is set when txFIFO is empty */
+#define SPI_INT_STA_TX_FULL (0x1 <<  6) /* txFIFO full, this bit is set when txFIFO is full */
+#define SPI_INT_STA_RX_OVF  (0x1 <<  8) /* rxFIFO overflow, when set rxFIFO has overflowed */
+#define SPI_INT_STA_RX_UDR  (0x1 <<  9) /* rxFIFO underrun, when set rxFIFO has underrun */
+#define SPI_INT_STA_TX_OVF  (0x1 << 10) /* txFIFO overflow, when set txFIFO has overflowed */
+#define SPI_INT_STA_TX_UDR  (0x1 << 11) /* fxFIFO underrun, when set txFIFO has underrun */
+#define SPI_INT_STA_TC      (0x1 << 12) /* Transfer Completed */
+#define SPI_INT_STA_SSI     (0x1 << 13) /* SS invalid interrupt, when set SS has changed from valid to invalid */
+#define SPI_INT_STA_ERR     (SPI_INT_STA_TX_OVF | SPI_INT_STA_RX_UDR | SPI_INT_STA_RX_OVF) /* NO txFIFO underrun */
 #define SPI_INT_STA_MASK    (0x77 | (0x3f << 8))
 
 #define GPIO_BASE           (0x02000000)
@@ -119,9 +119,11 @@ void spi_batch_data_transfer(u8 *buf,
         writeb(*txbuf8++, spi_tx_reg);
         txsize--;
         /* read rx data as soon as when it is available */
-        if(readl(spi_fifo_reg) & 0xf) {
-            *rxbuf8++ = readb(spi_rx_reg);
-            rxsize--;
+        if(rxsize){
+            if(readl(spi_fifo_reg) & 0xf) {
+                *rxbuf8++ = readb(spi_rx_reg);
+                rxsize--;
+            }
         }
     }
 
