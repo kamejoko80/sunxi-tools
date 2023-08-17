@@ -571,6 +571,14 @@ spi_flash_info_t default_spi_flash_info = {
 	.text_description = "Unknown",
 };
 
+spi_flash_info_t f35sqa001g_spi_flash_info = {
+	.id = 0xcd71, .write_enable_cmd = 0x6,
+	.large_erase_cmd = 0xD8, .large_erase_size = 64 * 2048, // block erase
+	.small_erase_cmd = 0x00, .small_erase_size = 0,         // not applicated
+	.program_cmd = 0x02, .program_size = 2048,              // page program
+	.text_description = "Foresee F35SQA001G",
+};
+
 /*****************************************************************************/
 
 uint32_t fel_readl(feldev_handle *dev, uint32_t addr);
@@ -2033,13 +2041,34 @@ static void prepare_spi_batch_data_transfer(feldev_handle *dev, uint32_t buf)
 
 }
 
-/*
- * Read data from the SPI flash. Use the first 4KiB of SRAM as the data buffer.
- */
 #define F35SQA001G_PAGE_SIZE (2048)
 #define CMDTXLEN             (4)
 #define CMDRXLEN             (F35SQA001G_PAGE_SIZE)
 #define CMDBUF_SIZE          (4 + CMDTXLEN + CMDRXLEN)
+
+/*
+ * Read spi flash cache
+ */
+static void aw_fel_spiflash_read_to_cache(feldev_handle *dev, uint32_t page_addr)
+{
+    soc_info_t *soc_info = dev->soc_info;
+
+    /* read cache command: 0x13 dummy PA15-8 PA7-0 */
+    uint8_t cmdbuf[] = { 4, 0, 0, 0, 0x13, 0, 0x00, 0x00};
+
+    /* prepare command */
+    cmdbuf[4] = 0x13;
+    cmdbuf[6] = (page_addr >> 8) & 0xf;;
+    cmdbuf[7] = page_addr & 0xf;
+
+    /* execure spi */
+    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
+    aw_fel_remotefunc_execute(dev, NULL);
+}
+
+/*
+ * Read data from the SPI flash. Use the first 4KiB of SRAM as the data buffer.
+ */
 void aw_fel_spiflash_read(feldev_handle *dev,
 			  uint32_t offset, void *buf, size_t len,
 			  progress_cb_t progress)
@@ -2111,15 +2140,18 @@ void aw_fel_spiflash_read(feldev_handle *dev,
     txbuf = &cmdbuf8[4];
     rxbuf = &cmdbuf8[4 + CMDTXLEN];
 
+    /* read from cache command */
+    txbuf[0] = 0x03;
+    txbuf[1] = 0x00; /* CA15-8 */
+    txbuf[2] = 0x00; /* CA7-0 */
+    txbuf[3] = 0x00; /* dummy */
+
     progress_start(progress, len);
 
     while (len > 0) {
 
-        /* page address */
-        txbuf[0] = 0x03;
-        txbuf[1] = page_addr & 0xf;
-        txbuf[2] = (page_addr >> 8) & 0xf;
-        txbuf[3] = 0x00; /* dummy */
+        /* reach to cache */
+        aw_fel_spiflash_read_to_cache(dev, page_addr);
 
         /* execure spi */
         aw_fel_write(dev, cmdbuf, soc_info->spl_addr, CMDBUF_SIZE);
@@ -2151,12 +2183,41 @@ void aw_fel_spiflash_read(feldev_handle *dev,
             pos = 0;
             len -= copy_size;
         }
-        page_addr += max_chunk_size;
+        page_addr += 1;
     }
 
     free(cmdbuf);
 	restore_sram(dev, backup);
 }
+
+/*
+ * Erase blocks of SPI flash memory
+ * This function must be called in aw_fel_spiflash_write()'s context
+ */
+static void aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t offset, size_t block_cnt)
+{
+    soc_info_t *soc_info = dev->soc_info;
+    spi_flash_info_t *flash_info = &f35sqa001g_spi_flash_info;
+
+    /* Block erase command: 0xd8 dummy PA15-8 PA7-0 */
+    uint8_t cmdbuf[] = { 4, 0, 0, 0, 0x00, 0, 0x00, 0x00};
+
+    /* block erase cmd */
+    cmdbuf[4] = flash_info->large_erase_cmd;
+    //cmdbuf[6] =
+
+    while(block_cnt){
+
+        /* Execute command */
+        aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
+        aw_fel_remotefunc_execute(dev, NULL);
+
+        block_cnt--;
+    }
+
+
+}
+
 
 /*
  * Write data to the SPI flash. Use the first 4KiB of SRAM as the data buffer.
@@ -2239,6 +2300,12 @@ void aw_fel_spiflash_write(feldev_handle *dev,
 			   uint32_t offset, void *buf, size_t len,
 			   progress_cb_t progress)
 {
+#if 0
+
+    f35sqa001g_spi_flash_info;
+
+#else
+
 	void *backup = backup_sram(dev);
 	uint8_t *buf8 = (uint8_t *)buf;
 
@@ -2283,6 +2350,9 @@ void aw_fel_spiflash_write(feldev_handle *dev,
 	}
 
 	restore_sram(dev, backup);
+
+#endif
+
 }
 
 /*
@@ -2306,7 +2376,7 @@ void aw_fel_spiflash_info(feldev_handle *dev)
 {
 
 /* Test read data from cache */
-#if 1
+#if 0
     soc_info_t *soc_info = dev->soc_info;
     void *buf;
     uint8_t *buf8, *rxbuf, *txbuf;
