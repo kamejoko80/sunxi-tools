@@ -20,4 +20,5 @@ sunxi-fexc.exe
 sunxi-nand-part.exe
 sunxi-pio.exe
 *.c.su
+*.exe.stackdump
 

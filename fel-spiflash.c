@@ -253,11 +253,12 @@ struct core_pll_freq_tbl {
 };
 
 /* Debugging */
-#define DBG_INFO(...) printf(__VA_ARGS__)
+#define DBG_INFO(...)
+//#define DBG_INFO(...) printf(__VA_ARGS__)
 
 /* V851S defines */
 #define CONFIG_MACH_SUN8IW21
-#define SUNXI_CCM_BASE         (0x02001000)  
+#define SUNXI_CCM_BASE         (0x02001000)
 #define SUNXI_RTC_BASE         (0x07090000)
 #define SPI_XFER_END           (1<<1)
 #define SPI_XFER_BEGIN         (1<<0)
@@ -385,7 +386,7 @@ struct core_pll_freq_tbl {
 #define SPI_BURST_CNT_REG    (0x30)  /* burst counter register */
 #define SPI_TRANSMIT_CNT_REG (0x34)  /* transmit counter register */
 #define SPI_BCC_REG          (0x38)  /* burst control counter register */
-#define SPI_BATCR_REG        (0x40)  /* bit-aligned transfer configure register */ 
+#define SPI_BATCR_REG        (0x40)  /* bit-aligned transfer configure register */
 #define SPI_DMA_CTL_REG      (0x88)  /* DMA control register, only for 1639 */
 #define SPI_TXDATA_REG       (0x200) /* tx data register */
 #define SPI_RXDATA_REG       (0x300) /* rx data register */
@@ -626,15 +627,15 @@ void fel_writel(feldev_handle *dev, uint32_t addr, uint32_t val);
 
 /* V851S CCMU */
 #define V851S_CPU_CLK_REG           (0x02001000 + 0x0500)
-#define V851S_CPU_GATING_REG        (0x02001000 + 0x0504) 
+#define V851S_CPU_GATING_REG        (0x02001000 + 0x0504)
 #define V851S_AHB_CLK_REG           (0x02001000 + 0x0510)
 #define V851S_SPI0_CLK_REG          (0x02001000 + 0x0940)
-#define V851S_SRC_GATE_RST          (0x02001000 + 0x093C)      
-#define V851S_SPIF_CLK_CFG          (0x02001000 + 0x0950)   
+#define V851S_SRC_GATE_RST          (0x02001000 + 0x093C)
+#define V851S_SPIF_CLK_CFG          (0x02001000 + 0x0950)
 #define V851S_SPI_GATE_RST          (0x02001000 + 0x096C)
 
-/* SPI0 controller */  
-#define SUN8I_SPI0_VER              (spi_base(dev) + 0x0000) // SPI Version Register 
+/* SPI0 controller */
+#define SUN8I_SPI0_VER              (spi_base(dev) + 0x0000) // SPI Version Register
 #define SUN8I_SPI0_GCR              (spi_base(dev) + 0x0004) // SPI Global Control Register
 #define SUN8I_SPI0_TCR              (spi_base(dev) + 0x0008) // SPI Transfer Control Register
 #define SUN8I_SPI0_IER              (spi_base(dev) + 0x0010) // SPI Interrupt Control Register
@@ -666,7 +667,7 @@ void delay(void)
 {
     /* TODO: Try to find and fix the bug, which needs this workaround */
     struct timespec req = { .tv_nsec = 250000000 }; /* 250ms */
-    nanosleep(&req, NULL);    
+    nanosleep(&req, NULL);
 }
 
 uint32_t clock_get_pll6(feldev_handle *dev)
@@ -1008,14 +1009,14 @@ static int sunxi_spi_clk_init(feldev_handle *dev, uint32_t mod_clk)
 	/* spi gating */
 	writel(readl(&ccm->ahb_gate0) | (1 << 20), &ccm->ahb_gate0);
 #else
-    
+
     /* spi0 reset */
     writel(0, (uint32_t)&ccm->spi_gate_reset);
     writel(1 << 16, (uint32_t)&ccm->spi_gate_reset);
     delay();
     /* spi0 gating */
     writel((1 << 16) | (1 << 0), (uint32_t)&ccm->spi_gate_reset);
-    
+
 #endif
 
     DBG_INFO("src: %d Hz, spic: %d Hz, n=%d, m=%d\n", source_clk, source_clk/(1 << n)/m, n, m);
@@ -1068,27 +1069,27 @@ static void spi_config_tc(feldev_handle *dev)
 	else if (sclk_freq <= 24000000)
 		reg_val |= SPI_TC_SDM;
 	else
-		reg_val &= ~(SPI_TC_SDM | SPI_TC_SDC);    
-    
+		reg_val &= ~(SPI_TC_SDM | SPI_TC_SDC);
+
 	reg_val |= SPI_TC_DHB | SPI_TC_SS_LEVEL | SPI_TC_SPOL;
 	
     /* SPI MODE_0 CPOL=0, CPHA=0 */
     reg_val &= ~(SPI_TC_PHA | SPI_TC_POL);
-    
+
     /* SDC = 0 */
     reg_val &= ~SPI_TC_SDC;
-    
+
     writel(reg_val, V851S_SPI0_BASE + SPI_TC_REG);
-    
+
     DBG_INFO("SPI_TC_REG = %X\r\n", readl(V851S_SPI0_BASE + SPI_TC_REG));
-    
+
 }
 
 void spi_init_clk(feldev_handle *dev, uint32_t spi_clk)
 {
     /* Init spi clock */
-    sunxi_spi_clk_init(dev, spi_clk);        
-        
+    sunxi_spi_clk_init(dev, spi_clk);
+
     /* Config SPI */
     spi_config_tc(dev);
 }
@@ -1207,22 +1208,22 @@ static void spi_ss_owner(feldev_handle *dev, uint32_t on_off)
 static void spi_config_batcr(feldev_handle *dev)
 {
     uint32_t reg_val = readl(V851S_SPI0_BASE + SPI_BATCR_REG);
-    
+
     /* Configure the length of serial data frame (burst) of RX */
     reg_val |= (8 << 16); // 8 bits
-    
+
     /* Configure the length of serial data frame (burst) of TX */
     reg_val |= (8 << 8);  // 8 bits
-    
+
     // Work Mode Select
     // 00: Data frame is byte aligned in standard SPI, dual-output/dual
     // input SPI, dual IO SPI, and quad-output/quad-input SPI
     // 01: Reserved
     // 10: Data frame is bit aligned in 3-wire SPI
     // 11: Data frame is bit aligned in standard SPI
-    reg_val |= 0x3; // bit aligned 
-    
-    writel(reg_val, V851S_SPI0_BASE + SPI_BATCR_REG);   
+    reg_val |= 0x3; // bit aligned
+
+    writel(reg_val, V851S_SPI0_BASE + SPI_BATCR_REG);
 }
 
 /* disable irq type */
@@ -1284,10 +1285,10 @@ static int sunxi_spi_cpu_writel(feldev_handle *dev, const unsigned char *buf, un
     unsigned int i, word_cnt, rbyte_cnt;
     uint32_t data;
     unsigned char *pdata = (unsigned char *)&data;
-    
+
     word_cnt = len / 4;
-    rbyte_cnt = len % 4;    
-    
+    rbyte_cnt = len % 4;
+
     if(word_cnt) {
         for(i = 0; i < word_cnt; i++){
             pdata[0] = *tx_buf++;
@@ -1296,19 +1297,19 @@ static int sunxi_spi_cpu_writel(feldev_handle *dev, const unsigned char *buf, un
             pdata[3] = *tx_buf++;
             /* wait for TX fifo ready */
             while(!(readl(V851S_SPI0_BASE + SPI_INT_STA_REG) & SPI_INT_STA_TX_RDY));
-            writel(data, V851S_SPI0_BASE + SPI_TXDATA_REG);  
+            writel(data, V851S_SPI0_BASE + SPI_TXDATA_REG);
         }
-    }        
-        
+    }
+
     if(rbyte_cnt) {
         for(i = 0; i < rbyte_cnt; i++){
             pdata[i] = *tx_buf++;
         }
         /* wait for TX fifo ready */
         while(!(readl(V851S_SPI0_BASE + SPI_INT_STA_REG) & SPI_INT_STA_TX_RDY));
-		writel(data, V851S_SPI0_BASE + SPI_TXDATA_REG);        
+		writel(data, V851S_SPI0_BASE + SPI_TXDATA_REG);
     }
-    
+
 	return 0;
 }
 
@@ -1317,16 +1318,16 @@ static int sunxi_spi_cpu_readl(feldev_handle *dev, unsigned char *buf, unsigned 
 	unsigned char *rx_buf = buf;
     unsigned int i, act_len, word_cnt, rbyte_cnt;
     uint32_t data;
-    
-    /* 
+
+    /*
      * because fel only supports 32bit access so we need
      * to compine into word, rxfifo underun will occur if len is not
-     * multiple of 4 bytes     
+     * multiple of 4 bytes
      */
     act_len = spi_query_rxfifo(dev);
     word_cnt = act_len / 4;
     rbyte_cnt = act_len % 4;
-    
+
     if(word_cnt) {
         for(i = 0; i < word_cnt; i++)
         {
@@ -1346,7 +1347,7 @@ static int sunxi_spi_cpu_readl(feldev_handle *dev, unsigned char *buf, unsigned 
             data >>= 8;
         }
     }
-    
+
 	return 0;
 }
 
@@ -1519,10 +1520,10 @@ int spi_xfer(feldev_handle *dev, const uint8_t *tx, size_t tx_len, size_t dummy_
 		if (sunxi_spi_cpu_writel(dev, tx, tx_len))
 			return -1;
 	}
-    
+
     /* start transfer */
     spi_start_xfer(dev);
-    
+
 	/* check tx/rx finish */
 	/* wait transfer complete */
 	while (!(spi_qry_irq_pending(dev)&SPI_INT_STA_TC)) {
@@ -1544,29 +1545,29 @@ int spi_xfer(feldev_handle *dev, const uint8_t *tx, size_t tx_len, size_t dummy_
 		printf("SPI_MBC Error!\n");
 		return -1;
 	}
-    
+
     DBG_INFO("RX FIFO CNT %d\r\n", spi_query_rxfifo(dev));
-    
+
 	/* check int status error */
 	if (spi_qry_irq_pending(dev) & SPI_INT_STA_ERR) {
 		printf("int status error");
 		return -1;
-	}    
-    
+	}
+
 	/* rx */
 	if (rx_len) {
 		if (sunxi_spi_cpu_readl(dev, rx, rx_len))
             return -1;
-	}    
-       
+	}
+
     /* check if having redundant TXFIO entry */
     redundant_txfifo = spi_query_txfifo(dev);
-    
+
     if(redundant_txfifo) {
         DBG_INFO("redundant txfifo cnt %d\r\n", redundant_txfifo);
-        spi_reset_fifo(dev); 
+        spi_reset_fifo(dev);
     }
-       
+
 	spi_clr_irq_pending(dev, 0xffffffff);
 
 	return 0;
@@ -1594,7 +1595,7 @@ static void spi_print_info(feldev_handle *dev)
 			SPI_WAIT_CNT_REG, readl(V851S_SPI0_BASE + SPI_WAIT_CNT_REG),
 			SPI_CLK_CTL_REG, readl(V851S_SPI0_BASE + SPI_CLK_CTL_REG),
 			SPI_SDC_REG, readl(V851S_SPI0_BASE + SPI_SDC_REG),
-            
+
 			SPI_BURST_CNT_REG, readl(V851S_SPI0_BASE + SPI_BURST_CNT_REG),
 			SPI_TRANSMIT_CNT_REG, readl(V851S_SPI0_BASE + SPI_TRANSMIT_CNT_REG),
 			SPI_BCC_REG, readl(V851S_SPI0_BASE + SPI_BCC_REG),
@@ -1615,7 +1616,7 @@ static uint32_t gpio_base(feldev_handle *dev)
 	case 0x1823: /* H616 */
 		return 0x0300B000;
 	case 0x1886: /* V851s */
-		return 0x02000000;        
+		return 0x02000000;
 	default:
 		return 0x01C20800;
 	}
@@ -1675,8 +1676,8 @@ static void gpio_set_cfgpin(feldev_handle *dev, int port_num, int pin_num,
         uint32_t x = readl(cfg_reg);
         x &= ~(0x7 << (pin_idx * 4));
         x |= val << (pin_idx * 4);
-        writel(x, cfg_reg);        
-    }        
+        writel(x, cfg_reg);
+    }
 }
 
 static bool spi_is_sun6i(feldev_handle *dev)
@@ -1774,7 +1775,7 @@ static bool spi0_init(feldev_handle *dev)
 		gpio_set_cfgpin(dev, PC, 3, SUN8I_GPC_SPI0);    /* SPI0_MISO/DO  */
         gpio_set_cfgpin(dev, PC, 4, SUN8I_GPC_SPI0);	/* SPI0_WP/IO2   */
         gpio_set_cfgpin(dev, PC, 5, SUN8I_GPC_SPI0);	/* SPI0_HOLD/IO3 */
-		break;        
+		break;
 	default: /* Unknown/Unsupported SoC */
 		printf("SPI support not implemented yet for %x (%s)!\n",
 		       soc_info->soc_id, soc_info->name);
@@ -1783,21 +1784,21 @@ static bool spi0_init(feldev_handle *dev)
 
     /* Init V851s SPI clock (chip = F35SQA001G) */
     if(spi_is_sun8i(dev)) {
-        
-        /* configure cpu clock */    
+
+        /* configure cpu clock */
         clock_set_corepll(dev, 900);
         /* fix reset circuit detection threshold */
 	    rtc_set_vccio_det_spare(dev);
         DBG_INFO("CPU=%d MHz, PLL6=%d Mhz, AHB=%d Mhz, APB1=%dMhz, MBus=%dMhz\n",
 		clock_get_corepll(dev),
 		clock_get_pll6(dev), clock_get_ahb(dev),
-		clock_get_apb1(dev),clock_get_mbus(dev));        
-        
+		clock_get_apb1(dev),clock_get_mbus(dev));
+
         /* init spi clock */
         spi_init_clk(dev, 100000000); /* SPI module clock rate */
-        
+
         uint32_t sclk_freq = 0;
-        
+
         sclk_freq = sunxi_get_spic_clk(dev);
         if(!sclk_freq)
             exit(1);
@@ -1818,7 +1819,7 @@ static bool spi0_init(feldev_handle *dev)
         /* 5. master : set POL,PHA,SSOPL,LMTF,DDB,DHB; default: SSCTL=0,SMC=1,TBW=0.
          * 6. set bit width-default: 8 bits
 	     */
-        //spi_config_batcr(dev); 
+        //spi_config_batcr(dev);
 	    spi_ss_level(dev, 1);
         spi_enable_tp(dev);
         /* 7. spi controller sends ss signal automatically */
@@ -1826,45 +1827,45 @@ static bool spi0_init(feldev_handle *dev)
         /* 8. reset fifo */
         spi_reset_fifo(dev);
 
-/* For debuging purpose only */        
-#if 0    
+/* For debuging purpose only */
+#if 0
         printf("soc_info->name         %s\r\n", soc_info->name);
         printf("soc_info->spl_addr     %X\r\n", soc_info->spl_addr);
         printf("soc_info->scratch_addr %X\r\n", soc_info->scratch_addr);
         printf("soc_info->sram_size    %d\r\n", soc_info->sram_size);
-        
+
         /* SPI register info */
         spi_print_info(dev);
-        
+
         /*
-         *  [VER] 0x00 = 0x00010001, 
+         *  [VER] 0x00 = 0x00010001,
          *  [GCR] 0x04 = 0x00000083, TP_EN=1, MODE=1, EN=1
          *  [TCR] 0x08 = 0x00000987, SDC=0, DHB=1, SS_LEVEL=1, SPOL=1, CPOL=0, CPHA=0
-         *  [IER] 0x10 = 0x00000000, 
-         *  [ISR] 0x14 = 0x00000032, 
+         *  [IER] 0x10 = 0x00000000,
+         *  [ISR] 0x14 = 0x00000032,
          *  [FCR] 0x18 = 0x00200020,
-         *  [FSR] 0x1c = 0x00000000, 
-         *  [WCR] 0x20 = 0x00000000, 
+         *  [FSR] 0x1c = 0x00000000,
+         *  [WCR] 0x20 = 0x00000000,
          *  [CCR] 0x24 = 0x00000302,
-         *  [DCR] 0x28 = 0x00002000, 
-         *  [BCR] 0x30 = 0x00000000, 
+         *  [DCR] 0x28 = 0x00002000,
+         *  [BCR] 0x30 = 0x00000000,
          *  [MTC] 0x34 = 0x00000000,
-         *  [BCC] 0x38 = 0x00000000, 
+         *  [BCC] 0x38 = 0x00000000,
          *  [DMA] 0x88 = 0x000000e5,
          */
-       
+
         uint8_t	tx[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
         uint8_t rx[32];
         int i;
-      
+
         // Read status
         //tx[0] = 0x0F;
-        //tx[1] = 0xC0;  // Protect 0xA0, Config 0xB0, Status 0xC0   
+        //tx[1] = 0xC0;  // Protect 0xA0, Config 0xB0, Status 0xC0
         //memset(rx, 0x00, 32);
         //spi_xfer(dev, tx, 2, 0, rx, 1);
         //printf("Status register = %X\r\n", rx[0]);
-      
-        // Page read 0x13 (read to cache)    
+
+        // Page read 0x13 (read to cache)
         tx[0] = 0x13;
         tx[1] = 0x00; // Dummy
         tx[2] = 0x00; // PA[15-8]
@@ -1872,7 +1873,7 @@ static bool spi0_init(feldev_handle *dev)
         spi_xfer(dev, tx, 4, 0, NULL, 0);
         delay();
         delay();
-  
+
         // Read from cache 0x03
         tx[0] = 0x3;
         tx[1] = 0x00; // CA[15-8]
@@ -1884,7 +1885,7 @@ static bool spi0_init(feldev_handle *dev)
         }
 
         exit(1);
-#endif            
+#endif
 
     } else {
         if (soc_is_h6_style(dev)) {
@@ -1898,12 +1899,12 @@ static bool spi0_init(feldev_handle *dev)
                 reg_val |= SUN6I_SPI0_RST;
                 writel(reg_val, SUN6I_BUS_SOFT_RST_REG0);
             }
-    
+
             reg_val = readl(CCM_AHB_GATING0);
             reg_val |= CCM_AHB_GATE_SPI0;
             writel(reg_val, CCM_AHB_GATING0);
         }
-    
+
         if (soc_info->soc_id == 0x1663) {	/* suniv F1C100s */
             /*
             * suniv doesn't have a module clock for SPI0 and the clock
@@ -1911,7 +1912,7 @@ static bool spi0_init(feldev_handle *dev)
             * setting PLL6 to 600 MHz with a divider of 3, then program
             * the internal SPI dividier to 32.
             */
-    
+
             /* Set PLL6 to 600MHz */
             writel(0x80041801, SUNIV_PLL6_CTL);
             /* PLL6:AHB:APB = 6:2:1 */
@@ -1926,7 +1927,7 @@ static bool spi0_init(feldev_handle *dev)
             writel(1U << 31,
                 soc_is_h6_style(dev) ? H6_CCM_SPI0_CLK : CCM_SPI0_CLK);
         }
-    
+
         if (spi_is_sun6i(dev)) {
             /* Enable SPI in the master mode and do a soft reset */
             reg_val = readl(SUN6I_SPI0_GCR);
@@ -1941,7 +1942,7 @@ static bool spi0_init(feldev_handle *dev)
             writel(reg_val, SUN4I_SPI0_CTL);
         }
     }
-    
+
 	return true;
 }
 
@@ -1966,7 +1967,7 @@ static void restore_sram(feldev_handle *dev, void *buf)
 	free(buf);
 }
 
-#define SUN8I_SPI0_VER              (spi_base(dev) + 0x0000) // SPI Version Register 
+#define SUN8I_SPI0_VER              (spi_base(dev) + 0x0000) // SPI Version Register
 #define SUN8I_SPI0_GCR              (spi_base(dev) + 0x0004) // SPI Global Control Register
 #define SUN8I_SPI0_TCR              (spi_base(dev) + 0x0008) // SPI Transfer Control Register
 #define SUN8I_SPI0_IER              (spi_base(dev) + 0x0010) // SPI Interrupt Control Register
@@ -2003,8 +2004,8 @@ static void prepare_spi_batch_data_transfer(feldev_handle *dev, uint32_t buf)
 							    SUN8I_SPI0_MTC,
 							    SUN8I_SPI0_BCC);
     }
-    
-#if 0 /* disable */    
+
+#if 0 /* disable */
     if (spi_is_sun6i(dev)) {
 		aw_fel_remotefunc_prepare_spi_batch_data_transfer(dev,
 							    buf,
@@ -2029,59 +2030,131 @@ static void prepare_spi_batch_data_transfer(feldev_handle *dev, uint32_t buf)
 							    0);
 	}
 #endif
-    
+
 }
 
 /*
  * Read data from the SPI flash. Use the first 4KiB of SRAM as the data buffer.
  */
+#define F35SQA001G_PAGE_SIZE (2048)
+#define CMDTXLEN             (4)
+#define CMDRXLEN             (F35SQA001G_PAGE_SIZE)
+#define CMDBUF_SIZE          (4 + CMDTXLEN + CMDRXLEN)
 void aw_fel_spiflash_read(feldev_handle *dev,
 			  uint32_t offset, void *buf, size_t len,
 			  progress_cb_t progress)
 {
 	soc_info_t *soc_info = dev->soc_info;
 	void *backup = backup_sram(dev);
-	uint8_t *buf8 = (uint8_t *)buf;
-	size_t max_chunk_size = soc_info->scratch_addr - soc_info->spl_addr;
-	if (max_chunk_size > 0x1000)
-		max_chunk_size = 0x1000;
-	uint8_t *cmdbuf = malloc(max_chunk_size);
-	memset(cmdbuf, 0, max_chunk_size);
-	aw_fel_write(dev, cmdbuf, soc_info->spl_addr, max_chunk_size);
+    uint8_t *buf8 = (uint8_t *)buf;
+    size_t max_chunk_size = soc_info->scratch_addr - soc_info->spl_addr;
+    uint32_t page_addr, pos, copy_size;
+
+    /*           [4]     [5]    [6]    [7] ...
+     * command: 0x03   CA15-8  CA7-0  Dummy  D0 D1 D2...
+     * txlen = 4
+     * rxlen = 2048 [0x800] (2K bytes)
+     *
+     * total len = 4 + 4 + 2048 = 2056
+     */
+    void *cmdbuf = malloc(CMDBUF_SIZE);
+    uint8_t *cmdbuf8, *rxbuf, *txbuf;
+
+    if(cmdbuf == NULL) {
+        printf("Error memory\r\n");
+        return;
+    }
+
+    /*
+     *  pos indicates byte offset in a page.
+     *
+     *  page_addr n  page_addr n+1  page_addr n+2
+     *
+     *  [..........][..........][..........]
+     *     |       |
+     *     |-------|
+     *     |   \
+     *    pos   \____ page size - pos
+     *
+     *     |-----|        : In case of len < (page size - pos)
+     *                      • copy data size = len
+     *                      • pos = pos + copy data size
+     *                      • len = len - copy data size
+     *
+     *     |------------| : In case of len >= (page size - pos)
+     *                      • copy data size = (page size - pos)
+     *                      • pos = 0
+     *                      • len = len - copy data size
+     */
 
 	if (!spi0_init(dev))
 		return;
 
-	prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
+    prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
 
-	progress_start(progress, len);
-	while (len > 0) {
-		size_t chunk_size = len;
-		if (chunk_size > max_chunk_size - 8)
-			chunk_size = max_chunk_size - 8;
+    /* For F35SQA001G, max chunk size = page size = 2K */
+	if (max_chunk_size > F35SQA001G_PAGE_SIZE)
+		max_chunk_size = F35SQA001G_PAGE_SIZE;
 
-		memset(cmdbuf, 0, max_chunk_size);
-		cmdbuf[0] = (chunk_size + 4) >> 8;
-		cmdbuf[1] = (chunk_size + 4);
-		cmdbuf[2] = 3;
-		cmdbuf[3] = offset >> 16;
-		cmdbuf[4] = offset >> 8;
-		cmdbuf[5] = offset;
+    /* Calculate page_addr and first_post */
+    page_addr = (offset + 1) / max_chunk_size;
+    pos = offset % max_chunk_size;
 
-		if (chunk_size == max_chunk_size - 8)
-			aw_fel_write(dev, cmdbuf, soc_info->spl_addr, 6);
-		else
-			aw_fel_write(dev, cmdbuf, soc_info->spl_addr, chunk_size + 8);
-		aw_fel_remotefunc_execute(dev, NULL);
-		aw_fel_read(dev, soc_info->spl_addr + 6, buf8, chunk_size);
+    /* prepare tx,rx len info */
+    cmdbuf8 = (uint8_t *)cmdbuf;
+    cmdbuf8[0] = CMDTXLEN & 0xFF;
+    cmdbuf8[1] = CMDTXLEN >> 8;
+    cmdbuf8[2] = CMDRXLEN & 0xFF;
+    cmdbuf8[3] = CMDRXLEN >> 8;
 
-		len -= chunk_size;
-		offset += chunk_size;
-		buf8 += chunk_size;
-		progress_update(chunk_size);
-	}
+    /* txbuf, rxbuf */
+    txbuf = &cmdbuf8[4];
+    rxbuf = &cmdbuf8[4 + CMDTXLEN];
 
-	free(cmdbuf);
+    progress_start(progress, len);
+
+    while (len > 0) {
+
+        /* page address */
+        txbuf[0] = 0x03;
+        txbuf[1] = page_addr & 0xf;
+        txbuf[2] = (page_addr >> 8) & 0xf;
+        txbuf[3] = 0x00; /* dummy */
+
+        /* execure spi */
+        aw_fel_write(dev, cmdbuf, soc_info->spl_addr, CMDBUF_SIZE);
+        aw_fel_remotefunc_execute(dev, NULL);
+        aw_fel_read(dev, soc_info->spl_addr, cmdbuf, CMDBUF_SIZE);
+
+        if(len < (max_chunk_size - pos)){
+            copy_size = len;
+            progress_update(copy_size);
+            // printf("len < (max_chunk_size - pos)\r\n");
+            // printf("page_addr = %X\r\n", page_addr);
+            // printf("pos       = %d\r\n", pos);
+            // printf("len       = %d\r\n", len);
+            printf("copy_size = %d\r\n", copy_size);
+            memcpy((void*)buf8, (void*)&rxbuf[pos], copy_size);
+            buf8 += copy_size;
+            pos  += copy_size;
+            len  -= copy_size;
+        }else {
+            copy_size = max_chunk_size - pos;
+            progress_update(copy_size);
+            // printf("len >= (max_chunk_size - pos)\r\n");
+            // printf("page_addr = %X\r\n", page_addr);
+            // printf("pos       = %d\r\n", pos);
+            // printf("len       = %d\r\n", len);
+            printf("copy_size = %d\r\n", copy_size);
+            memcpy((void*)buf8, (void*)&rxbuf[pos], copy_size);
+            buf8 += copy_size;
+            pos = 0;
+            len -= copy_size;
+        }
+        page_addr += max_chunk_size;
+    }
+
+    free(cmdbuf);
 	restore_sram(dev, backup);
 }
 
@@ -2213,17 +2286,17 @@ void aw_fel_spiflash_write(feldev_handle *dev,
 }
 
 /*
- * Because previous implementation is very complicated so for V851S 
- * we will implement in a different way, the working buffer(spl_addr) 
- * layout is organized as below: 
+ * Because previous implementation is very complicated so for V851S
+ * we will implement in a different way, the working buffer(spl_addr)
+ * layout is organized as below:
  *
- * | byte 0 | byte 1 | byte 2 | byte 3 |...........|.........| 
- *  \_______________/ \_______________/ \_________/ \________/       
- *          |                  |             |          | 
+ * | byte 0 | byte 1 | byte 2 | byte 3 |...........|.........|
+ *  \_______________/ \_______________/ \_________/ \________/
+ *          |                  |             |          |
  *        txlen              rxlen         txbuf      rxbuf
  *
  *  Where: total len = 4 + txlen + rxlen <= spl ram size (4096)
- *     
+ *
  */
 
 /*
@@ -2232,8 +2305,8 @@ void aw_fel_spiflash_write(feldev_handle *dev,
 void aw_fel_spiflash_info(feldev_handle *dev)
 {
 
-/* Test read data from cache */    
-#if 1 
+/* Test read data from cache */
+#if 1
     soc_info_t *soc_info = dev->soc_info;
     void *buf;
     uint8_t *buf8, *rxbuf, *txbuf;
@@ -2249,65 +2322,65 @@ void aw_fel_spiflash_info(feldev_handle *dev)
      * command: 0x03   CA15-8  CA7-0  Dummy  D0 D1 D2...
      * txlen = 4
      * rxlen = 3072 [0xC00] (3K bytes)
-     * 
+     *
      * total len = 4 + 4 + 3072 = 3080
-     */    
-    
+     */
+
     #define TXLEN    (4)
-    #define RXLEN    (2048) 
+    #define RXLEN    (2048)
     #define BUF_SIZE (4 + TXLEN + RXLEN)
-    
+
     buf = malloc(BUF_SIZE);
 
     if(buf == NULL) {
         printf("Error memory\r\n");
         return;
     }
-    
+
     /* prepare tx,rx len info */
     buf8 = (uint8_t *)buf;
     buf8[0] = TXLEN & 0xFF;
     buf8[1] = TXLEN >> 8;
     buf8[2] = RXLEN & 0xFF;
     buf8[3] = RXLEN >> 8;
-    
+
     txbuf = &buf8[4];
     rxbuf = &buf8[4 + TXLEN];
-    
+
     /* read cache command */
     txbuf[0] = 0x03;
     txbuf[1] = 0x00; /* Read page 0 */
     txbuf[2] = 0x00;
     txbuf[3] = 0x00; /* dummy */
-        
+
 	aw_fel_write(dev, buf, soc_info->spl_addr, BUF_SIZE);
 	aw_fel_remotefunc_execute(dev, NULL);
 	aw_fel_read(dev, soc_info->spl_addr, buf, BUF_SIZE);
-    
+
     printf("Read page 0:\r\n");
     for(i=0; i<RXLEN; i++) {
         printf("rxbuf[%d] = %X\r\n", i, rxbuf[i]);
     }
-    
+
     /* read cache command */
     txbuf[0] = 0x03;
     txbuf[1] = 0x01; /* Read page 1 */
     txbuf[2] = 0x00;
     txbuf[3] = 0x00; /* dummy */
-        
+
 	aw_fel_write(dev, buf, soc_info->spl_addr, BUF_SIZE);
 	aw_fel_remotefunc_execute(dev, NULL);
 	aw_fel_read(dev, soc_info->spl_addr, buf, BUF_SIZE);
-    
+
     printf("Read page 1:\r\n");
     for(i=0; i<RXLEN; i++) {
         printf("rxbuf[%d] = %X\r\n", i, rxbuf[i]);
-    }  
-      
+    }
+
 	restore_sram(dev, backup);
     free(buf);
-    
-#else    
+
+#else
 	soc_info_t *soc_info = dev->soc_info;
 	const char *manufacturer;
     /* F35SQA001G JEDEC CMD 0x9F Dummy MID DID DID */
@@ -2316,12 +2389,12 @@ void aw_fel_spiflash_info(feldev_handle *dev)
 
 	if (!spi0_init(dev))
 		return;
-    
+
     //printf("soc_info->name         %s\r\n", soc_info->name);
     //printf("soc_info->spl_addr     %X\r\n", soc_info->spl_addr);
     //printf("soc_info->scratch_addr %X\r\n", soc_info->scratch_addr);
     //printf("soc_info->sram_size    %d\r\n", soc_info->sram_size);
-    
+
 	aw_fel_write(dev, buf, soc_info->spl_addr, sizeof(buf));
 	prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
 	aw_fel_remotefunc_execute(dev, NULL);
@@ -2347,7 +2420,7 @@ void aw_fel_spiflash_info(feldev_handle *dev)
 		break;
 	case 0xCD:
 		manufacturer = "Foresee";
-		break;        
+		break;
 	default:
 		manufacturer = "Unknown";
 		break;
@@ -2355,7 +2428,7 @@ void aw_fel_spiflash_info(feldev_handle *dev)
 
 	printf("Manufacturer: %s (%02Xh), model: %02Xh, size: %d bytes.\n",
 	       manufacturer, buf[6], buf[7], (buf[3] << 8) | buf[2]);
-#endif           
+#endif
 }
 
 /*
