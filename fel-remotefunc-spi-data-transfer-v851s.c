@@ -51,6 +51,8 @@ typedef unsigned char u8;
 #define PF_CFG_REG         *(volatile u32*)(GPIO_BASE + PF_CFG)
 #define PF_DAT_REG         *(volatile u32*)(GPIO_BASE + PF_DAT)
 
+#define TIME_OUT            (0xFFFFFF)
+
 /*
  * Because previous implementation is very complicated so for V851S
  * we will implement in a different way, the working buffer(spl_addr)
@@ -81,6 +83,7 @@ void spi_batch_data_transfer(u8 *buf,
     u8  *rxbuf8;
     u8  *txbuf8;
     u32  cpsr;
+    u32 timeout;
 
     txsize = (buf[1] << 8) | buf[0];
     rxsize = (buf[3] << 8) | buf[2];
@@ -90,8 +93,6 @@ void spi_batch_data_transfer(u8 *buf,
 
     /* clear spi irq pending */
     writel(0xffffffff, spi_sta_reg);
-    /* turn off LED if there was an error before */
-    PF_DAT_REG &= ~(1 << 6);
 
     /* V851S SPI0 implementation */
     /* SPI_MBC = tx_len + rx_len + dummy_cnt(=0) */
@@ -115,6 +116,7 @@ void spi_batch_data_transfer(u8 *buf,
     writel(readl(spi_ctl_reg) | spi_ctl_xch_bitmask, spi_ctl_reg);
 
     /* tx data processing */
+    timeout = TIME_OUT;
     while(txsize) {
         /* wait for TX_READY */
         while(!(readl(spi_sta_reg) & SPI_INT_STA_TX_RDY));
@@ -127,15 +129,34 @@ void spi_batch_data_transfer(u8 *buf,
                 rxsize--;
             }
         }
+        /* check for timeout */
+        if(!timeout){
+            // Turn on LED on port PF6
+            PF_CFG_REG &= 0xF0FFFFFF;
+            PF_CFG_REG |= 1 << 24; // PF6 output
+            PF_DAT_REG |= 1 << 6;  // PF6 is high
+            return;
+        }
+        timeout--;
     }
 
     /* rx data processing */
+    timeout = TIME_OUT;
     while(rxsize) {
         /* read rx data as soon as when it is available */
         if(readl(spi_fifo_reg) & 0xf) {
             *rxbuf8++ = readb(spi_rx_reg);
             rxsize--;
         }
+        /* check for timeout */
+        if(!timeout){
+            // Turn on LED on port PF6
+            PF_CFG_REG &= 0xF0FFFFFF;
+            PF_CFG_REG |= 1 << 24; // PF6 output
+            PF_DAT_REG |= 1 << 6;  // PF6 is high
+            return;
+        }
+        timeout--;
     }
 
     /* check int status error */
