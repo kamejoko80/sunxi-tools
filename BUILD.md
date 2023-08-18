@@ -1,7 +1,7 @@
 # sunxi-tools for v851s build on Windows
 
  - Build environment: MinGW msys64 (Mysys2)
- - Shell: msys2
+ - Shell: msys2 (mingw64.exe)
  - Install the below packages:
 
  ```
