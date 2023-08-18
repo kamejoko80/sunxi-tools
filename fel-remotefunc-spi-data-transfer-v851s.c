@@ -52,17 +52,17 @@ typedef unsigned char u8;
 #define PF_DAT_REG         *(volatile u32*)(GPIO_BASE + PF_DAT)
 
 /*
- * Because previous implementation is very complicated so for V851S 
- * we will implement in a different way, the working buffer(spl_addr) 
- * layout is organized as below: 
+ * Because previous implementation is very complicated so for V851S
+ * we will implement in a different way, the working buffer(spl_addr)
+ * layout is organized as below:
  *
- * | byte 0 | byte 1 | byte 2 | byte 3 |...........|.........| 
- *  \_______________/ \_______________/ \_________/ \________/       
- *          |                  |             |          | 
+ * | byte 0 | byte 1 | byte 2 | byte 3 |...........|.........|
+ *  \_______________/ \_______________/ \_________/ \________/
+ *          |                  |             |          |
  *        txlen              rxlen         txbuf      rxbuf
  *
  *  Where: total len = 4 + txlen + rxlen <= spl ram size (4096)
- *     
+ *
  */
 
 void spi_batch_data_transfer(u8 *buf,
@@ -90,6 +90,8 @@ void spi_batch_data_transfer(u8 *buf,
 
     /* clear spi irq pending */
     writel(0xffffffff, spi_sta_reg);
+    /* turn off LED if there was an error before */
+    PF_DAT_REG &= ~(1 << 6);
 
     /* V851S SPI0 implementation */
     /* SPI_MBC = tx_len + rx_len + dummy_cnt(=0) */
@@ -143,9 +145,6 @@ void spi_batch_data_transfer(u8 *buf,
         PF_CFG_REG |= 1 << 24; // PF6 output
         PF_DAT_REG |= 1 << 6;  // PF6 is high
     }
-
-    /* clear spi irq pending */
-    writel(0xffffffff, spi_sta_reg);
 
     /* Restore CPSR */
     asm volatile("msr cpsr_c, %0" :: "r" (cpsr));

@@ -20,73 +20,75 @@ aw_fel_remotefunc_prepare_spi_batch_data_transfer(feldev_handle *dev,
 		0x03, 0x40, 0xd0, 0xe5, /*    c:    ldrb     r4, [r0, #3]                       */
 		0x0c, 0xe4, 0x8e, 0xe1, /*   10:    orr      lr, lr, ip, lsl #8                 */
 		0x02, 0xc0, 0xd0, 0xe5, /*   14:    ldrb     ip, [r0, #2]                       */
-		0x04, 0x80, 0x80, 0xe2, /*   18:    add      r8, r0, #4                         */
+		0x02, 0xa4, 0xa0, 0xe3, /*   18:    mov      sl, #33554432                      */
 		0x04, 0xc4, 0x8c, 0xe1, /*   1c:    orr      ip, ip, r4, lsl #8                 */
 		0x04, 0x40, 0x8e, 0xe2, /*   20:    add      r4, lr, #4                         */
-		0x04, 0x00, 0x80, 0xe0, /*   24:    add      r0, r0, r4                         */
-		0x00, 0x40, 0xe0, 0xe3, /*   28:    mvn      r4, #0                             */
-		0x00, 0x40, 0x83, 0xe5, /*   2c:    str      r4, [r3]                           */
-		0x2c, 0x40, 0x9d, 0xe5, /*   30:    ldr      r4, [sp, #44]                      */
-		0x34, 0x50, 0x9d, 0xe5, /*   34:    ldr      r5, [sp, #52]                      */
-		0x0c, 0xa0, 0x8e, 0xe0, /*   38:    add      sl, lr, ip                         */
-		0x00, 0xa0, 0x84, 0xe5, /*   3c:    str      sl, [r4]                           */
-		0x30, 0x40, 0x9d, 0xe5, /*   40:    ldr      r4, [sp, #48]                      */
-		0x00, 0x00, 0x55, 0xe3, /*   44:    cmp      r5, #0                             */
-		0x00, 0xe0, 0x84, 0xe5, /*   48:    str      lr, [r4]                           */
-		0x00, 0x40, 0x95, 0x15, /*   4c:    ldrne    r4, [r5]                           */
-		0x20, 0x60, 0x9d, 0xe5, /*   50:    ldr      r6, [sp, #32]                      */
-		0x0f, 0x42, 0x04, 0x12, /*   54:    andne    r4, r4, #-268435456                */
-		0x0e, 0x40, 0x84, 0x11, /*   58:    orrne    r4, r4, lr                         */
-		0x24, 0x90, 0x9d, 0xe5, /*   5c:    ldr      r9, [sp, #36]                      */
-		0x28, 0x70, 0x9d, 0xe5, /*   60:    ldr      r7, [sp, #40]                      */
-		0x00, 0x40, 0x85, 0x15, /*   64:    strne    r4, [r5]                           */
-		0x00, 0x40, 0x0f, 0xe1, /*   68:    mrs      r4, CPSR                           */
-		0xc0, 0x50, 0x84, 0xe3, /*   6c:    orr      r5, r4, #192                       */
-		0x05, 0xf0, 0x21, 0xe1, /*   70:    msr      CPSR_c, r5                         */
-		0x00, 0x50, 0x91, 0xe5, /*   74:    ldr      r5, [r1]                           */
-		0x02, 0x20, 0x85, 0xe1, /*   78:    orr      r2, r5, r2                         */
-		0x00, 0x20, 0x81, 0xe5, /*   7c:    str      r2, [r1]                           */
-		0x00, 0x00, 0x5e, 0xe3, /*   80:    cmp      lr, #0                             */
-		0x13, 0x00, 0x00, 0x1a, /*   84:    bne      d8 <spi_batch_data_transfer+0xd8>  */
-		0x0c, 0xc0, 0x80, 0xe0, /*   88:    add      ip, r0, ip                         */
-		0x00, 0x00, 0x5c, 0xe1, /*   8c:    cmp      ip, r0                             */
-		0x1e, 0x00, 0x00, 0x1a, /*   90:    bne      110 <spi_batch_data_transfer+0x110> */
-		0x00, 0x20, 0x93, 0xe5, /*   94:    ldr      r2, [r3]                           */
-		0x07, 0x0c, 0x12, 0xe3, /*   98:    tst      r2, #1792                          */
-		0x09, 0x00, 0x00, 0x0a, /*   9c:    beq      c8 <spi_batch_data_transfer+0xc8>  */
-		0x02, 0x24, 0xa0, 0xe3, /*   a0:    mov      r2, #33554432                      */
-		0xf0, 0x10, 0x92, 0xe5, /*   a4:    ldr      r1, [r2, #240]                     */
-		0x0f, 0x14, 0xc1, 0xe3, /*   a8:    bic      r1, r1, #251658240                 */
-		0xf0, 0x10, 0x82, 0xe5, /*   ac:    str      r1, [r2, #240]                     */
-		0xf0, 0x10, 0x92, 0xe5, /*   b0:    ldr      r1, [r2, #240]                     */
-		0x01, 0x14, 0x81, 0xe3, /*   b4:    orr      r1, r1, #16777216                  */
-		0xf0, 0x10, 0x82, 0xe5, /*   b8:    str      r1, [r2, #240]                     */
-		0x00, 0x11, 0x92, 0xe5, /*   bc:    ldr      r1, [r2, #256]                     */
-		0x40, 0x10, 0x81, 0xe3, /*   c0:    orr      r1, r1, #64                        */
-		0x00, 0x11, 0x82, 0xe5, /*   c4:    str      r1, [r2, #256]                     */
-		0x00, 0x20, 0xe0, 0xe3, /*   c8:    mvn      r2, #0                             */
-		0x00, 0x20, 0x83, 0xe5, /*   cc:    str      r2, [r3]                           */
-		0x04, 0xf0, 0x21, 0xe1, /*   d0:    msr      CPSR_c, r4                         */
-		0xf0, 0x87, 0xbd, 0xe8, /*   d4:    pop      {r4, r5, r6, r7, r8, r9, sl, pc}   */
-		0x00, 0x20, 0x93, 0xe5, /*   d8:    ldr      r2, [r3]                           */
-		0x10, 0x00, 0x12, 0xe3, /*   dc:    tst      r2, #16                            */
-		0xfc, 0xff, 0xff, 0x0a, /*   e0:    beq      d8 <spi_batch_data_transfer+0xd8>  */
-		0x01, 0x20, 0xd8, 0xe4, /*   e4:    ldrb     r2, [r8], #1                       */
-		0x00, 0x00, 0x5c, 0xe3, /*   e8:    cmp      ip, #0                             */
-		0x01, 0xe0, 0x4e, 0xe2, /*   ec:    sub      lr, lr, #1                         */
-		0x00, 0x20, 0xc9, 0xe5, /*   f0:    strb     r2, [r9]                           */
-		0xe1, 0xff, 0xff, 0x0a, /*   f4:    beq      80 <spi_batch_data_transfer+0x80>  */
-		0x00, 0x20, 0x96, 0xe5, /*   f8:    ldr      r2, [r6]                           */
-		0x0f, 0x00, 0x12, 0xe3, /*   fc:    tst      r2, #15                            */
-		0x00, 0x20, 0xd7, 0x15, /*  100:    ldrbne   r2, [r7]                           */
-		0x01, 0xc0, 0x4c, 0x12, /*  104:    subne    ip, ip, #1                         */
-		0x01, 0x20, 0xc0, 0x14, /*  108:    strbne   r2, [r0], #1                       */
-		0xdb, 0xff, 0xff, 0xea, /*  10c:    b        80 <spi_batch_data_transfer+0x80>  */
-		0x00, 0x20, 0x96, 0xe5, /*  110:    ldr      r2, [r6]                           */
-		0x0f, 0x00, 0x12, 0xe3, /*  114:    tst      r2, #15                            */
-		0x00, 0x20, 0xd7, 0x15, /*  118:    ldrbne   r2, [r7]                           */
-		0x01, 0x20, 0xc0, 0x14, /*  11c:    strbne   r2, [r0], #1                       */
-		0xd9, 0xff, 0xff, 0xea, /*  120:    b        8c <spi_batch_data_transfer+0x8c>  */
+		0x04, 0x80, 0x80, 0xe2, /*   24:    add      r8, r0, #4                         */
+		0x04, 0x00, 0x80, 0xe0, /*   28:    add      r0, r0, r4                         */
+		0x00, 0x40, 0xe0, 0xe3, /*   2c:    mvn      r4, #0                             */
+		0x00, 0x40, 0x83, 0xe5, /*   30:    str      r4, [r3]                           */
+		0x00, 0x41, 0x9a, 0xe5, /*   34:    ldr      r4, [sl, #256]                     */
+		0x34, 0x50, 0x9d, 0xe5, /*   38:    ldr      r5, [sp, #52]                      */
+		0x40, 0x40, 0xc4, 0xe3, /*   3c:    bic      r4, r4, #64                        */
+		0x20, 0x60, 0x9d, 0xe5, /*   40:    ldr      r6, [sp, #32]                      */
+		0x24, 0x90, 0x9d, 0xe5, /*   44:    ldr      r9, [sp, #36]                      */
+		0x28, 0x70, 0x9d, 0xe5, /*   48:    ldr      r7, [sp, #40]                      */
+		0x00, 0x41, 0x8a, 0xe5, /*   4c:    str      r4, [sl, #256]                     */
+		0x2c, 0x40, 0x9d, 0xe5, /*   50:    ldr      r4, [sp, #44]                      */
+		0x0c, 0xa0, 0x8e, 0xe0, /*   54:    add      sl, lr, ip                         */
+		0x00, 0xa0, 0x84, 0xe5, /*   58:    str      sl, [r4]                           */
+		0x30, 0x40, 0x9d, 0xe5, /*   5c:    ldr      r4, [sp, #48]                      */
+		0x00, 0x00, 0x55, 0xe3, /*   60:    cmp      r5, #0                             */
+		0x00, 0xe0, 0x84, 0xe5, /*   64:    str      lr, [r4]                           */
+		0x00, 0x40, 0x95, 0x15, /*   68:    ldrne    r4, [r5]                           */
+		0x0f, 0x42, 0x04, 0x12, /*   6c:    andne    r4, r4, #-268435456                */
+		0x0e, 0x40, 0x84, 0x11, /*   70:    orrne    r4, r4, lr                         */
+		0x00, 0x40, 0x85, 0x15, /*   74:    strne    r4, [r5]                           */
+		0x00, 0x40, 0x0f, 0xe1, /*   78:    mrs      r4, CPSR                           */
+		0xc0, 0x50, 0x84, 0xe3, /*   7c:    orr      r5, r4, #192                       */
+		0x05, 0xf0, 0x21, 0xe1, /*   80:    msr      CPSR_c, r5                         */
+		0x00, 0x50, 0x91, 0xe5, /*   84:    ldr      r5, [r1]                           */
+		0x02, 0x20, 0x85, 0xe1, /*   88:    orr      r2, r5, r2                         */
+		0x00, 0x20, 0x81, 0xe5, /*   8c:    str      r2, [r1]                           */
+		0x00, 0x00, 0x5e, 0xe3, /*   90:    cmp      lr, #0                             */
+		0x11, 0x00, 0x00, 0x1a, /*   94:    bne      e0 <spi_batch_data_transfer+0xe0>  */
+		0x0c, 0xc0, 0x80, 0xe0, /*   98:    add      ip, r0, ip                         */
+		0x00, 0x00, 0x5c, 0xe1, /*   9c:    cmp      ip, r0                             */
+		0x1c, 0x00, 0x00, 0x1a, /*   a0:    bne      118 <spi_batch_data_transfer+0x118> */
+		0x00, 0x30, 0x93, 0xe5, /*   a4:    ldr      r3, [r3]                           */
+		0x07, 0x0c, 0x13, 0xe3, /*   a8:    tst      r3, #1792                          */
+		0x09, 0x00, 0x00, 0x0a, /*   ac:    beq      d8 <spi_batch_data_transfer+0xd8>  */
+		0x02, 0x34, 0xa0, 0xe3, /*   b0:    mov      r3, #33554432                      */
+		0xf0, 0x20, 0x93, 0xe5, /*   b4:    ldr      r2, [r3, #240]                     */
+		0x0f, 0x24, 0xc2, 0xe3, /*   b8:    bic      r2, r2, #251658240                 */
+		0xf0, 0x20, 0x83, 0xe5, /*   bc:    str      r2, [r3, #240]                     */
+		0xf0, 0x20, 0x93, 0xe5, /*   c0:    ldr      r2, [r3, #240]                     */
+		0x01, 0x24, 0x82, 0xe3, /*   c4:    orr      r2, r2, #16777216                  */
+		0xf0, 0x20, 0x83, 0xe5, /*   c8:    str      r2, [r3, #240]                     */
+		0x00, 0x21, 0x93, 0xe5, /*   cc:    ldr      r2, [r3, #256]                     */
+		0x40, 0x20, 0x82, 0xe3, /*   d0:    orr      r2, r2, #64                        */
+		0x00, 0x21, 0x83, 0xe5, /*   d4:    str      r2, [r3, #256]                     */
+		0x04, 0xf0, 0x21, 0xe1, /*   d8:    msr      CPSR_c, r4                         */
+		0xf0, 0x87, 0xbd, 0xe8, /*   dc:    pop      {r4, r5, r6, r7, r8, r9, sl, pc}   */
+		0x00, 0x20, 0x93, 0xe5, /*   e0:    ldr      r2, [r3]                           */
+		0x10, 0x00, 0x12, 0xe3, /*   e4:    tst      r2, #16                            */
+		0xfc, 0xff, 0xff, 0x0a, /*   e8:    beq      e0 <spi_batch_data_transfer+0xe0>  */
+		0x01, 0x20, 0xd8, 0xe4, /*   ec:    ldrb     r2, [r8], #1                       */
+		0x00, 0x00, 0x5c, 0xe3, /*   f0:    cmp      ip, #0                             */
+		0x01, 0xe0, 0x4e, 0xe2, /*   f4:    sub      lr, lr, #1                         */
+		0x00, 0x20, 0xc9, 0xe5, /*   f8:    strb     r2, [r9]                           */
+		0xe3, 0xff, 0xff, 0x0a, /*   fc:    beq      90 <spi_batch_data_transfer+0x90>  */
+		0x00, 0x20, 0x96, 0xe5, /*  100:    ldr      r2, [r6]                           */
+		0x0f, 0x00, 0x12, 0xe3, /*  104:    tst      r2, #15                            */
+		0x00, 0x20, 0xd7, 0x15, /*  108:    ldrbne   r2, [r7]                           */
+		0x01, 0xc0, 0x4c, 0x12, /*  10c:    subne    ip, ip, #1                         */
+		0x01, 0x20, 0xc0, 0x14, /*  110:    strbne   r2, [r0], #1                       */
+		0xdd, 0xff, 0xff, 0xea, /*  114:    b        90 <spi_batch_data_transfer+0x90>  */
+		0x00, 0x20, 0x96, 0xe5, /*  118:    ldr      r2, [r6]                           */
+		0x0f, 0x00, 0x12, 0xe3, /*  11c:    tst      r2, #15                            */
+		0x00, 0x20, 0xd7, 0x15, /*  120:    ldrbne   r2, [r7]                           */
+		0x01, 0x20, 0xc0, 0x14, /*  124:    strbne   r2, [r0], #1                       */
+		0xdb, 0xff, 0xff, 0xea, /*  128:    b        9c <spi_batch_data_transfer+0x9c>  */
 	};
 	uint32_t args[] = {
 		buf,
