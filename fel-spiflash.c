@@ -451,12 +451,12 @@ struct core_pll_freq_tbl {
 #define SPI_FIFO_CTL_RX_LEVEL	(0xFF <<  0) /* rxFIFO reday request trigger level,default 0x1 */
 #define SPI_FIFO_CTL_RX_DRQEN	(0x1  <<  8) /* rxFIFO DMA request enable,1:enable,0:disable */
 #define SPI_FIFO_CTL_RX_TESTEN	(0x1  << 14) /* rxFIFO test mode enable,1:enable,0:disable */
-#define SPI_FIFO_CTL_RX_RST	(0x1  << 15) /* rxFIFO reset, write 1, auto clear to 0 */
+#define SPI_FIFO_CTL_RX_RST	    (0x1  << 15) /* rxFIFO reset, write 1, auto clear to 0 */
 #define SPI_FIFO_CTL_TX_LEVEL	(0xFF << 16) /* txFIFO empty request trigger level,default 0x40 */
 #define SPI_FIFO_CTL_TX_DRQEN	(0x1  << 24) /* txFIFO DMA request enable,1:enable,0:disable */
 #define SPI_FIFO_CTL_TX_TESTEN	(0x1  << 30) /* txFIFO test mode enable,1:enable,0:disable */
-#define SPI_FIFO_CTL_TX_RST	(0x1  << 31) /* txFIFO reset, write 1, auto clear to 0 */
-#define SPI_FIFO_CTL_DRQEN_MASK	(SPI_FIFO_CTL_TX_DRQEN|SPI_FIFO_CTL_RX_DRQEN)
+#define SPI_FIFO_CTL_TX_RST	    (0x1  << 31) /* txFIFO reset, write 1, auto clear to 0 */
+#define SPI_FIFO_CTL_DRQEN_MASK	(SPI_FIFO_CTL_TX_DRQEN | SPI_FIFO_CTL_RX_DRQEN)
 
 /* SPI FIFO Status Register Bit Fields & Masks,default value:0x0000_0000 */
 #define SPI_FIFO_STA_RX_CNT	(0xFF <<  0) /* rxFIFO counter,how many bytes in rxFIFO */
@@ -1085,10 +1085,10 @@ static void spi_config_tc(feldev_handle *dev)
     reg_val &= ~(SPI_TC_PHA | SPI_TC_POL);
 
     /* SDC = 0 */
-    // reg_val &= ~SPI_TC_SDC;
+    reg_val &= ~SPI_TC_SDC; /* very important */
 
-    /* SDC = 1 */
-    reg_val |= SPI_TC_SDC;
+    /* SDM = 1 */
+    reg_val |= SPI_TC_SDM; /* very important */
 
     writel(reg_val, V851S_SPI0_BASE + SPI_TC_REG);
 
@@ -2403,8 +2403,10 @@ static void aw_fel_spiflash_read_from_cache(feldev_handle *dev)
      * rxlen = 2048 [0x800] (2K bytes)
      */
 
+    size_t rxlen = F35SQA001G_PAGE_SIZE;
+     
     uint8_t cmd[] = {0x03, 0x00, 0x00, 0};
-    aw_fel_spiflash_spibuf_create(&spibuf, cmd, sizeof(cmd), 0, F35SQA001G_PAGE_SIZE);
+    aw_fel_spiflash_spibuf_create(&spibuf, cmd, sizeof(cmd), 0, rxlen);
 
     /* read data from cache */
     aw_fel_write(dev, spibuf.buf, soc_info->spl_addr, spibuf.len);
@@ -2412,10 +2414,12 @@ static void aw_fel_spiflash_read_from_cache(feldev_handle *dev)
     aw_fel_read(dev, soc_info->spl_addr, spibuf.buf, spibuf.len);
 
     /* print data from cache */
-    for(int i=0; i < F35SQA001G_PAGE_SIZE; i++) {
+    for(int i=0; i < rxlen; i++) {
         printf("rxbuf[%d] = %X\r\n", i, spibuf.rxbuf[i]);
     }
 
+    printf("RXFIFO level = %d\r\n", spi_query_rxfifo(dev));    
+    
     /* free memory */
     aw_fel_spiflash_spibuf_free(&spibuf);
 }
@@ -2425,6 +2429,8 @@ static void aw_fel_spiflash_read_from_cache(feldev_handle *dev)
  */
 static void aw_fel_spiflash_program_data_load(feldev_handle *dev, uint8_t *buf, size_t len)
 {
+    
+#if 1    
     soc_info_t *soc_info = dev->soc_info;
     spi_buf spibuf;
 
@@ -2449,6 +2455,14 @@ static void aw_fel_spiflash_program_data_load(feldev_handle *dev, uint8_t *buf, 
 
     /* free memory */
     aw_fel_spiflash_spibuf_free(&spibuf);
+
+#else
+
+    /* print data in cache (debugging) */
+    aw_fel_spiflash_read_from_cache(dev);    
+
+#endif
+
 }
 
 /*

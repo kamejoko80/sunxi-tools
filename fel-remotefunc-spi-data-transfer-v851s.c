@@ -52,8 +52,15 @@ typedef unsigned char u8;
 #define PF_DAT_REG         *(volatile u32*)(GPIO_BASE + PF_DAT)
 
 #define SPI_CLK_CTL_REG     (0x04025000 + 0x24)  /* clock rate control register */
-
 #define TIME_OUT            (0xFFFFFF)
+
+#define goto_error()\
+({\
+    PF_CFG_REG &= 0xF0FFFFFF;\
+    PF_CFG_REG |= 1 << 24;\
+    PF_DAT_REG |= 1 << 6;\
+    return;\
+})
 
 /*
  * Because previous implementation is very complicated so for V851S
@@ -86,26 +93,12 @@ void spi_batch_data_transfer(u8 *buf,
     u8  *txbuf8;
     u32  cpsr;
     u32 timeout;
-    u32 spi_clk_rate_restore;
 
     txsize = (buf[1] << 8) | buf[0];
     rxsize = (buf[3] << 8) | buf[2];
 
     txbuf8 = &buf[4];
     rxbuf8 = &buf[4 + txsize];
-
-    /*
-     * Workaround read/write issue
-     *    large txsize -> CPU writing TXFIO too fast -> workaround increase sclk
-     *    large rxsize -> CPU reading RXFIO too slow -> workaround decrease sclk
-     */
-    spi_clk_rate_restore = readl(SPI_CLK_CTL_REG);
-
-    if(txsize > 64) {
-        writel(0x202, SPI_CLK_CTL_REG);
-    } else {
-        writel(0x302, SPI_CLK_CTL_REG);
-    }
 
     /* clear spi irq pending */
     writel(0xffffffff, spi_sta_reg);
@@ -140,18 +133,14 @@ void spi_batch_data_transfer(u8 *buf,
         txsize--;
         /* read rx data as soon as when it is available */
         if(rxsize){
-            if(readl(spi_fifo_reg) & 0xf) {
+            if(readl(spi_fifo_reg) & 0xff) {
                 *rxbuf8++ = readb(spi_rx_reg);
                 rxsize--;
             }
         }
         /* check for timeout */
         if(!timeout){
-            // Turn on LED on port PF6
-            PF_CFG_REG &= 0xF0FFFFFF;
-            PF_CFG_REG |= 1 << 24; // PF6 output
-            PF_DAT_REG |= 1 << 6;  // PF6 is high
-            return;
+            goto_error();
         }
         timeout--;
     }
@@ -160,31 +149,21 @@ void spi_batch_data_transfer(u8 *buf,
     timeout = TIME_OUT;
     while(rxsize) {
         /* read rx data as soon as when it is available */
-        if(readl(spi_fifo_reg) & 0xf) {
+        if(readl(spi_fifo_reg) & 0xff) {
             *rxbuf8++ = readb(spi_rx_reg);
             rxsize--;
         }
         /* check for timeout */
         if(!timeout){
-            // Turn on LED on port PF6
-            PF_CFG_REG &= 0xF0FFFFFF;
-            PF_CFG_REG |= 1 << 24; // PF6 output
-            PF_DAT_REG |= 1 << 6;  // PF6 is high
-            return;
+            goto_error();
         }
         timeout--;
     }
 
     /* check int status error */
     if(readl(spi_sta_reg) & SPI_INT_STA_ERR){
-        // Turn on LED on port PF6
-        PF_CFG_REG &= 0xF0FFFFFF;
-        PF_CFG_REG |= 1 << 24; // PF6 output
-        PF_DAT_REG |= 1 << 6;  // PF6 is high
+        goto_error();
     }
-
-    /* restore SPI clock rate */
-    writel(spi_clk_rate_restore, SPI_CLK_CTL_REG);
 
     /* Restore CPSR */
     asm volatile("msr cpsr_c, %0" :: "r" (cpsr));
