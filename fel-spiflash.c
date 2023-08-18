@@ -253,8 +253,8 @@ struct core_pll_freq_tbl {
 };
 
 /* Debugging */
-#define DBG_INFO(...)
-//#define DBG_INFO(...) printf(__VA_ARGS__)
+//#define DBG_INFO(...)
+#define DBG_INFO(...) printf(__VA_ARGS__)
 
 /* V851S defines */
 #define CONFIG_MACH_SUN8IW21
@@ -1085,7 +1085,10 @@ static void spi_config_tc(feldev_handle *dev)
     reg_val &= ~(SPI_TC_PHA | SPI_TC_POL);
 
     /* SDC = 0 */
-    reg_val &= ~SPI_TC_SDC;
+    // reg_val &= ~SPI_TC_SDC;
+
+    /* SDC = 1 */
+    reg_val |= SPI_TC_SDC;
 
     writel(reg_val, V851S_SPI0_BASE + SPI_TC_REG);
 
@@ -1175,6 +1178,9 @@ static void spi_set_clk(feldev_handle *dev, uint32_t spi_clk, uint32_t ahb_clk, 
 	}
 
 	writel(reg_val, V851S_SPI0_BASE + SPI_CLK_CTL_REG);
+
+    printf("SPI_CLK_CTL_REG = %X\r\n", readl(V851S_SPI0_BASE + SPI_CLK_CTL_REG));
+
 }
 
 /* set ss level */
@@ -1283,7 +1289,7 @@ static void spi_reset_fifo(feldev_handle *dev)
 	reg_val |= (SPI_FIFO_CTL_RX_RST|SPI_FIFO_CTL_TX_RST);
 	/* Set the trigger level of RxFIFO/TxFIFO. */
 	reg_val &= ~(SPI_FIFO_CTL_RX_LEVEL|SPI_FIFO_CTL_TX_LEVEL);
-    reg_val |= (0x20<<16) | 0x20; // TX_TRIG_LEVEL = 32, RX_TRIG_LEVEL = 32
+    reg_val |= (0x40<<16) | 0x40; // TX_TRIG_LEVEL = 64, RX_TRIG_LEVEL = 64
 	writel(reg_val, V851S_SPI0_BASE + SPI_FIFO_CTL_REG);
 }
 
@@ -1823,7 +1829,11 @@ static bool spi0_init(feldev_handle *dev)
          * 4. set the default frequency	10MHz
          */
         spi_set_master(dev);
-        spi_set_clk(dev, 20000000, sclk_freq, 0); /* SPI clock pin rate */
+        /*
+         * There is an issue related to read/write SPI spead
+         * V851s CPU will adjust SPI spi sck pin depends on tx/rx size
+         */
+        spi_set_clk(dev, 40000000, sclk_freq, 0); /* SPI clock pin rate */
         /* 5. master : set POL,PHA,SSOPL,LMTF,DDB,DHB; default: SSCTL=0,SMC=1,TBW=0.
          * 6. set bit width-default: 8 bits
 	     */
@@ -2045,13 +2055,120 @@ static void prepare_spi_batch_data_transfer(feldev_handle *dev, uint32_t buf)
 #define CMDRXLEN             (F35SQA001G_PAGE_SIZE)
 #define CMDBUF_SIZE          (4 + CMDTXLEN + CMDRXLEN)
 
-#define SR1_ADDR (0xA0) /* Protection register */ 
+#define SR1_ADDR (0xA0) /* Protection register */
 #define SR2_ADDR (0xB0) /* Configuration register */
 #define SR3_ADDR (0xC0) /* Status register */
 #define SR4_ADDR (0x80) /* Sector 0 ECC */
 #define SR5_ADDR (0x84) /* Sector 1 ECC */
 #define SR6_ADDR (0x88) /* Sector 2 ECC */
 #define SR6_ADDR (0x8C) /* Sector 3 ECC */
+
+/*
+ * Because previous implementation is very complicated so for V851S
+ * we will implement in a different way, the working buffer(spl_addr)
+ * layout is organized as below:
+ *
+ * | byte 0 | byte 1 | byte 2 | byte 3 |...........|...........|.........|
+ *  \_______________/ \_______________/ \_________/ \_________/ \________/
+ *          |                  |             |           |          |
+ *        txlen              rxlen          cmd        txbuf      rxbuf
+ *                                      <---------> <-------->  <-------->
+ *                                           |          |           |
+ *                                           |          |         rxlen
+ *                                 txlen = cmdlen  +  txdlen
+ *
+ *  Where: total len = 4 + txlen + rxlen <= spl ram size (4096)
+ *
+ */
+
+ typedef struct spi_buf{
+    void *buf;
+    uint8_t *cmd;
+    uint8_t *txbuf;
+    uint8_t *rxbuf;
+    size_t len;
+    size_t cmdlen;
+    size_t txdlen;
+    size_t rxlen;
+}spi_buf;
+
+/*
+ * spi buffer generation
+ */
+static void aw_fel_spiflash_spibuf_create(spi_buf *spibuf,
+    uint8_t *cmd, size_t cmdlen, size_t txdlen, size_t rxlen)
+{
+    if((NULL == cmd) || (0 == cmdlen)){
+        return;
+    }
+
+    spibuf->len = 4 + txdlen + cmdlen + rxlen;
+    spibuf->buf = malloc(spibuf->len);
+
+    uint8_t *buf8 = (uint8_t *)spibuf->buf;
+
+    if(NULL == spibuf->buf) {
+        printf("Memmory allocation failed\r\n");
+        return;
+    }
+
+    /* prepare tx/rx len */
+    buf8[0] = (txdlen + cmdlen) & 0xff;
+    buf8[1] = ((txdlen + cmdlen) >> 8) & 0xff;
+    buf8[2] = rxlen & 0xff;
+    buf8[3] = (rxlen >> 8) & 0xff;
+
+    /* cmd */
+    spibuf->cmd = &buf8[4];
+    spibuf->cmdlen = cmdlen;
+    memcpy((void *)spibuf->cmd, (void *)cmd, cmdlen);
+
+    /* txdata */
+    if(txdlen) {
+        spibuf->txbuf = &spibuf->cmd[cmdlen];
+        spibuf->txdlen = txdlen;
+        memset((void *)spibuf->txbuf, 0x00, spibuf->txdlen);
+    } else {
+        spibuf->txdlen = 0;
+        spibuf->txbuf = NULL;
+    }
+
+    /* reset rxbuf if any */
+    if(rxlen) {
+        if(txdlen) {
+            spibuf->rxbuf = &spibuf->txbuf[txdlen];
+            spibuf->rxlen = rxlen;
+            memset((void *)spibuf->rxbuf, 0x00, rxlen);
+        } else {
+            spibuf->rxbuf = &spibuf->cmd[cmdlen];
+            spibuf->rxlen = rxlen;
+            memset((void *)spibuf->rxbuf, 0x00, rxlen);
+        }
+    } else {
+        spibuf->rxbuf = NULL;
+        spibuf->rxlen = 0;
+    }
+}
+
+static void aw_fel_spiflash_spibuf_free(spi_buf *spibuf)
+{
+    if(NULL == spibuf){
+        return;
+    }
+
+    spibuf->len = 0;
+    spibuf->cmdlen = 0;
+    spibuf->txdlen = 0;
+    spibuf->rxlen = 0;
+
+    spibuf->cmd= NULL;
+    spibuf->txbuf = NULL;
+    spibuf->rxbuf = NULL;
+
+    if(NULL != spibuf->buf){
+        free(spibuf->buf);
+    }
+}
 
 /*
  * Read spi flash cache
@@ -2209,56 +2326,56 @@ static void aw_fel_spiflash_write_enable(feldev_handle *dev)
 
     /* execure spi */
     aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
-    aw_fel_remotefunc_execute(dev, NULL);    
+    aw_fel_remotefunc_execute(dev, NULL);
 }
 
 /*
  * Read status command
- */  
+ */
 static uint8_t aw_fel_spiflash_read_status(feldev_handle *dev, uint8_t sta_addr)
 {
     soc_info_t *soc_info = dev->soc_info;
 
     /* get feature command: 0x0F sta_addr S7-0 */
     uint8_t cmdbuf[] = { 2, 0, 1, 0, 0x0F, 0x00, 0x00};
-    
+
     /* prepare command */
     cmdbuf[5] = sta_addr;
-    
+
     /* execure spi */
     aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
     aw_fel_remotefunc_execute(dev, NULL);
     aw_fel_read(dev, soc_info->spl_addr, cmdbuf, sizeof(cmdbuf));
 
-    return cmdbuf[6];   
+    return cmdbuf[6];
 }
 
 /*
  * Write status command
- */ 
+ */
 static void aw_fel_spiflash_write_status(feldev_handle *dev, uint8_t sta_addr, uint8_t value)
 {
     soc_info_t *soc_info = dev->soc_info;
 
     /* set feature command: 0x1F sta_addr S7-0 */
     uint8_t cmdbuf[] = { 3, 0, 0, 0, 0x1F, 0x00, 0x00};
-    
+
     /* prepare command */
     cmdbuf[5] = sta_addr;
     cmdbuf[6] = value;
-    
+
     /* execure spi */
     aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
-    aw_fel_remotefunc_execute(dev, NULL); 
+    aw_fel_remotefunc_execute(dev, NULL);
 }
 
 /*
  * Wait for SPI flash operation
- */  
+ */
 static uint8_t aw_fel_spiflash_wait_for_busy(feldev_handle *dev)
 {
     uint8_t status;
-    
+
     do {
         delay();
         status = aw_fel_spiflash_read_status(dev, SR3_ADDR);
@@ -2267,125 +2384,71 @@ static uint8_t aw_fel_spiflash_wait_for_busy(feldev_handle *dev)
         }
         if(status & 0x4){
             printf("Warning! E-FAIL occured\r\n");
-        }        
-    } while(status & 0x1); 
+        }
+    } while(status & 0x1);
 }
 
 
 /*
  * read data from cache (for debuging only)
- */  
+ */
 static void aw_fel_spiflash_read_from_cache(feldev_handle *dev)
 {
     soc_info_t *soc_info = dev->soc_info;
-    
+    spi_buf spibuf;
+
     /*           [4]     [5]    [6]    [7] ...
      * command: 0x03   CA15-8  CA7-0  Dummy  D0 D1 D2...
-     * txlen = 4
+     * txdlen = 4
      * rxlen = 2048 [0x800] (2K bytes)
-     *
-     * total len = 4 + 4 + 2048 = 2056
      */
-     
-    size_t txlen = 4, rxlen = 2048;
-    size_t cmdbuf_size = 4 + txlen + rxlen;     
-    uint8_t *cmdbuf8, *rxbuf, *txbuf;
-    void *cmdbuf = malloc(cmdbuf_size);
 
-    if(cmdbuf == NULL) {
-        printf("Error memory\r\n");
-        return;
-    }  
-  
-    /* prepare tx,rx len info */
-    cmdbuf8 = (uint8_t *)cmdbuf;
-    cmdbuf8[0] = txlen & 0xff;
-    cmdbuf8[1] = (txlen >> 8) & 0xff;
-    cmdbuf8[2] = rxlen & 0xff;
-    cmdbuf8[3] = (rxlen >> 8) & 0xff;
+    uint8_t cmd[] = {0x03, 0x00, 0x00, 0};
+    aw_fel_spiflash_spibuf_create(&spibuf, cmd, sizeof(cmd), 0, F35SQA001G_PAGE_SIZE);
 
-    /* txbuf, rxbuf */
-    txbuf = &cmdbuf8[4];
-    rxbuf = &cmdbuf8[4 + txlen];  
-  
-    /* read from cache command */
-    txbuf[0] = 0x03;
-    txbuf[1] = 0x00; /* CA15-8 */
-    txbuf[2] = 0x00; /* CA7-0 */
-    txbuf[3] = 0x00; /* dummy */  
-    
     /* read data from cache */
-    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, cmdbuf_size);
+    aw_fel_write(dev, spibuf.buf, soc_info->spl_addr, spibuf.len);
     aw_fel_remotefunc_execute(dev, NULL);
-    aw_fel_read(dev, soc_info->spl_addr, cmdbuf, cmdbuf_size);    
-    
+    aw_fel_read(dev, soc_info->spl_addr, spibuf.buf, spibuf.len);
+
     /* print data from cache */
-    for(int i=0; i < rxlen; i++) {
-        printf("rxbuf[%d] = %X\r\n", i, rxbuf[i]);
+    for(int i=0; i < F35SQA001G_PAGE_SIZE; i++) {
+        printf("rxbuf[%d] = %X\r\n", i, spibuf.rxbuf[i]);
     }
 
     /* free memory */
-    free(cmdbuf);     
+    aw_fel_spiflash_spibuf_free(&spibuf);
 }
 
 /*
  * Load program data
- */  
+ */
 static void aw_fel_spiflash_program_data_load(feldev_handle *dev, uint8_t *buf, size_t len)
 {
     soc_info_t *soc_info = dev->soc_info;
-    
+    spi_buf spibuf;
+
     if(len > F35SQA001G_PAGE_SIZE){
         printf("Warning! len exceeds memory page size %d\r\n", F35SQA001G_PAGE_SIZE);
         len = F35SQA001G_PAGE_SIZE;
     }
-    
-    /* 
-     * load program data cmd format: 0x2 CA15-8 CA7-0 D0 D1 D2... 
-     * buffer structure:
-     *   txlen = 3 + page_size
-     *   rxlen = 0      
-     *   {txlen_L, txlen_H, 0, 0, 0x2, CA15-8, CA7-0, D0, D1, D2...}    
-     *   cmdbuff size = 4 + txlen 
+
+    /*
+     * load program data cmd format: 0x2 CA15-8 CA7-0 D0 D1 D2...
      */
-    
-    size_t txlen = 3 + F35SQA001G_PAGE_SIZE;     
-    size_t cmdbuf_size = 4 + txlen;
-    void *cmdbuf = malloc(cmdbuf_size);
-  
-    if(cmdbuf == NULL) {
-        printf("Error memory\r\n");
-        return;
-    }
-    
-    /* reset memory */
-    memset(cmdbuf, 0x00, cmdbuf_size);
-    
-    /* prepare command */
-    uint8_t *cmdbuf8 = (uint8_t *)cmdbuf;
-    cmdbuf8[0] = txlen & 0xff;
-    cmdbuf8[1] = (txlen >> 8) & 0xff;
-    cmdbuf8[2] = 0;
-    cmdbuf8[3] = 0;
-    cmdbuf8[4] = 0x2; /* load program data */
-    cmdbuf8[5] = 0;   /* always write entire page */
-    cmdbuf8[6] = 0;
-    /* load data */
-    memcpy((void *)&cmdbuf8[7], (void *)buf, len);
-        
-    printf("execute command load data\r\n");
-    
+    uint8_t cmd[] = {0x2, 0x00, 0x00 };
+    aw_fel_spiflash_spibuf_create(&spibuf, cmd, sizeof(cmd), F35SQA001G_PAGE_SIZE, 0);
+    memcpy((void *)spibuf.txbuf, (void *)buf, len);
+
     /* Execute command */
-    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, cmdbuf_size);
+    aw_fel_write(dev, spibuf.buf, soc_info->spl_addr, spibuf.len);
     aw_fel_remotefunc_execute(dev, NULL);
-    
-    delay();
-    
+
     /* print data in cache (debugging) */
     aw_fel_spiflash_read_from_cache(dev);
-    
+
     /* free memory */
-    free(cmdbuf); 
+    aw_fel_spiflash_spibuf_free(&spibuf);
 }
 
 /*
@@ -2396,40 +2459,40 @@ static int aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t page_addr, s
     soc_info_t *soc_info = dev->soc_info;
     spi_flash_info_t *flash_info = &f35sqa001g_spi_flash_info;
     uint8_t status;
-    
+
     /* read protect status register */
     status = aw_fel_spiflash_read_status(dev, SR1_ADDR);
     //printf("Protection status before = %X\r\n", status);
-    
+
     status &= 0x87; /* clear BP3-0, unprotect all blocks */
     aw_fel_spiflash_write_status(dev, SR1_ADDR, status);
-    status = aw_fel_spiflash_read_status(dev, SR1_ADDR);    
+    status = aw_fel_spiflash_read_status(dev, SR1_ADDR);
     //printf("Protection status after = %X\r\n", status);
-    
+
     /* write enable */
     aw_fel_spiflash_write_enable(dev);
-    
+
     /* read status and check WEL bit */
     status = aw_fel_spiflash_read_status(dev, SR3_ADDR);
-    
+
     if(!(status & 0x2)) {
         printf("Error! WEL bit is not set\r\n");
         return -1;
     }
-    
+
     printf("start to erase block\r\n");
-    
+
     /* Block erase command: 0xd8 dummy PA15-8 PA7-0 */
     uint8_t cmdbuf[] = { 4, 0, 0, 0, 0x00, 0, 0x00, 0x00};
 
     /* block erase cmd */
     cmdbuf[4] = flash_info->large_erase_cmd;
     cmdbuf[5] = 0x0; /* dummy */
-    
+
     while(block_cnt){
 
         printf("Erase lock PA = %X\r\n", page_addr);
-    
+
         /* prepare page addr parameter */
         cmdbuf[6] = (page_addr >> 8) & 0xf;;
         cmdbuf[7] = page_addr & 0xf;
@@ -2440,12 +2503,12 @@ static int aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t page_addr, s
 
         /* wait for busy flag */
         aw_fel_spiflash_wait_for_busy(dev);
-        
+
         /* update page addr and block count */
         page_addr += 64;
         block_cnt--;
     }
-    
+
     return 0;
 }
 
@@ -2533,21 +2596,23 @@ void aw_fel_spiflash_write(feldev_handle *dev,
 #if 1
     soc_info_t *soc_info = dev->soc_info;
     void *backup = backup_sram(dev);
-    
+
 	if (!spi0_init(dev))
 		return;
 
     prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
-    
+
     /* test erase block 0 */
     //aw_fel_spiflash_erase_block(dev, 0, 1);
 
     /* test cache */
     // static void aw_fel_spiflash_program_data_load(feldev_handle *dev, uint8_t *buf, size_t len);
-    uint8_t buffer[] = {0xAA, 0x55, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
+
+    uint8_t buffer[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA};
+
     aw_fel_spiflash_program_data_load(dev, buffer, sizeof(buffer));
-        
-    restore_sram(dev, backup);    
+
+    restore_sram(dev, backup);
 #else
 
 	void *backup = backup_sram(dev);
@@ -2598,20 +2663,6 @@ void aw_fel_spiflash_write(feldev_handle *dev,
 #endif
 
 }
-
-/*
- * Because previous implementation is very complicated so for V851S
- * we will implement in a different way, the working buffer(spl_addr)
- * layout is organized as below:
- *
- * | byte 0 | byte 1 | byte 2 | byte 3 |...........|.........|
- *  \_______________/ \_______________/ \_________/ \________/
- *          |                  |             |          |
- *        txlen              rxlen         txbuf      rxbuf
- *
- *  Where: total len = 4 + txlen + rxlen <= spl ram size (4096)
- *
- */
 
 /*
  * Use the read JEDEC ID (9Fh) command.
