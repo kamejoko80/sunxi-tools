@@ -253,8 +253,8 @@ struct core_pll_freq_tbl {
 };
 
 /* Debugging */
-//#define DBG_INFO(...)
-#define DBG_INFO(...) printf(__VA_ARGS__)
+#define DBG_INFO(...)
+//#define DBG_INFO(...) printf(__VA_ARGS__)
 
 /* V851S defines */
 #define CONFIG_MACH_SUN8IW21
@@ -1179,8 +1179,7 @@ static void spi_set_clk(feldev_handle *dev, uint32_t spi_clk, uint32_t ahb_clk, 
 
 	writel(reg_val, V851S_SPI0_BASE + SPI_CLK_CTL_REG);
 
-    printf("SPI_CLK_CTL_REG = %X\r\n", readl(V851S_SPI0_BASE + SPI_CLK_CTL_REG));
-
+    DBG_INFO("SPI_CLK_CTL_REG = %X\r\n", readl(V851S_SPI0_BASE + SPI_CLK_CTL_REG));
 }
 
 /* set ss level */
@@ -2392,21 +2391,17 @@ static uint8_t aw_fel_spiflash_wait_for_busy(feldev_handle *dev)
 /*
  * read data from cache (for debuging only)
  */
-static void aw_fel_spiflash_read_from_cache(feldev_handle *dev)
+static void aw_fel_spiflash_read_from_cache(feldev_handle *dev, size_t len)
 {
     soc_info_t *soc_info = dev->soc_info;
     spi_buf spibuf;
 
     /*           [4]     [5]    [6]    [7] ...
      * command: 0x03   CA15-8  CA7-0  Dummy  D0 D1 D2...
-     * txdlen = 4
-     * rxlen = 2048 [0x800] (2K bytes)
      */
 
-    size_t rxlen = F35SQA001G_PAGE_SIZE;
-     
     uint8_t cmd[] = {0x03, 0x00, 0x00, 0};
-    aw_fel_spiflash_spibuf_create(&spibuf, cmd, sizeof(cmd), 0, rxlen);
+    aw_fel_spiflash_spibuf_create(&spibuf, cmd, sizeof(cmd), 0, len);
 
     /* read data from cache */
     aw_fel_write(dev, spibuf.buf, soc_info->spl_addr, spibuf.len);
@@ -2414,12 +2409,24 @@ static void aw_fel_spiflash_read_from_cache(feldev_handle *dev)
     aw_fel_read(dev, soc_info->spl_addr, spibuf.buf, spibuf.len);
 
     /* print data from cache */
-    for(int i=0; i < rxlen; i++) {
-        printf("rxbuf[%d] = %X\r\n", i, spibuf.rxbuf[i]);
+    printf("Read data from spi cache:");
+    size_t i;
+    for(int i=0; i < len; i++) {
+        if(!(i % 16)) {
+            if(i <= 0xF){
+                printf("\r\n00%X:", i);
+            }else if(i <= 0xFF) {
+                printf("\r\n0%X:", i);
+            }else{
+                printf("\r\n%X:", i);
+            }
+        }
+        if(spibuf.rxbuf[i] <= 0xF){
+            printf(" 0%X", spibuf.rxbuf[i]);
+        }else{
+            printf(" %X", spibuf.rxbuf[i]);
+        }
     }
-
-    printf("RXFIFO level = %d\r\n", spi_query_rxfifo(dev));    
-    
     /* free memory */
     aw_fel_spiflash_spibuf_free(&spibuf);
 }
@@ -2429,8 +2436,7 @@ static void aw_fel_spiflash_read_from_cache(feldev_handle *dev)
  */
 static void aw_fel_spiflash_program_data_load(feldev_handle *dev, uint8_t *buf, size_t len)
 {
-    
-#if 1    
+
     soc_info_t *soc_info = dev->soc_info;
     spi_buf spibuf;
 
@@ -2443,7 +2449,7 @@ static void aw_fel_spiflash_program_data_load(feldev_handle *dev, uint8_t *buf, 
      * load program data cmd format: 0x2 CA15-8 CA7-0 D0 D1 D2...
      */
     uint8_t cmd[] = {0x2, 0x00, 0x00 };
-    aw_fel_spiflash_spibuf_create(&spibuf, cmd, sizeof(cmd), F35SQA001G_PAGE_SIZE, 0);
+    aw_fel_spiflash_spibuf_create(&spibuf, cmd, sizeof(cmd), len, 0);
     memcpy((void *)spibuf.txbuf, (void *)buf, len);
 
     /* Execute command */
@@ -2451,18 +2457,10 @@ static void aw_fel_spiflash_program_data_load(feldev_handle *dev, uint8_t *buf, 
     aw_fel_remotefunc_execute(dev, NULL);
 
     /* print data in cache (debugging) */
-    aw_fel_spiflash_read_from_cache(dev);
+    aw_fel_spiflash_read_from_cache(dev, F35SQA001G_PAGE_SIZE);
 
     /* free memory */
     aw_fel_spiflash_spibuf_free(&spibuf);
-
-#else
-
-    /* print data in cache (debugging) */
-    aw_fel_spiflash_read_from_cache(dev);    
-
-#endif
-
 }
 
 /*
