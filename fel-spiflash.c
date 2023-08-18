@@ -2202,17 +2202,14 @@ void aw_fel_spiflash_read(feldev_handle *dev,
     size_t max_chunk_size = soc_info->scratch_addr - soc_info->spl_addr;
     uint32_t page_addr, pos, copy_size;
 
-    /*           [4]     [5]    [6]    [7] ...
-     * command: 0x03   CA15-8  CA7-0  Dummy  D0 D1 D2...
-     * txlen = 4
-     * rxlen = 2048 [0x800] (2K bytes)
-     *
-     * total len = 4 + 4 + 2048 = 2056
+    /*
+     * read data from cache: 0x03 CA15-8 CA7-0 Dummy D0 D1 D2...
      */
-    void *cmdbuf = malloc(CMDBUF_SIZE);
-    uint8_t *cmdbuf8, *rxbuf, *txbuf;
+    spi_buf spibuf;
+    uint8_t cmd[] = {0x03, 0x00, 0x00, 0};
+    aw_fel_spiflash_spibuf_create(&spibuf, cmd, sizeof(cmd), 0, F35SQA001G_PAGE_SIZE);
 
-    if(cmdbuf == NULL) {
+    if(NULL == spibuf.buf){
         printf("Error memory\r\n");
         return;
     }
@@ -2252,23 +2249,6 @@ void aw_fel_spiflash_read(feldev_handle *dev,
     page_addr = (offset + 1) / max_chunk_size;
     pos = offset % max_chunk_size;
 
-    /* prepare tx,rx len info */
-    cmdbuf8 = (uint8_t *)cmdbuf;
-    cmdbuf8[0] = CMDTXLEN & 0xFF;
-    cmdbuf8[1] = CMDTXLEN >> 8;
-    cmdbuf8[2] = CMDRXLEN & 0xFF;
-    cmdbuf8[3] = CMDRXLEN >> 8;
-
-    /* txbuf, rxbuf */
-    txbuf = &cmdbuf8[4];
-    rxbuf = &cmdbuf8[4 + CMDTXLEN];
-
-    /* read from cache command */
-    txbuf[0] = 0x03;
-    txbuf[1] = 0x00; /* CA15-8 */
-    txbuf[2] = 0x00; /* CA7-0 */
-    txbuf[3] = 0x00; /* dummy */
-
     progress_start(progress, len);
 
     while (len > 0) {
@@ -2277,9 +2257,9 @@ void aw_fel_spiflash_read(feldev_handle *dev,
         aw_fel_spiflash_read_to_cache(dev, page_addr);
 
         /* read data from cache */
-        aw_fel_write(dev, cmdbuf, soc_info->spl_addr, CMDBUF_SIZE);
+        aw_fel_write(dev, spibuf.buf, soc_info->spl_addr, spibuf.len);
         aw_fel_remotefunc_execute(dev, NULL);
-        aw_fel_read(dev, soc_info->spl_addr, cmdbuf, CMDBUF_SIZE);
+        aw_fel_read(dev, soc_info->spl_addr, spibuf.buf, spibuf.len);
 
         if(len < (max_chunk_size - pos)){
             copy_size = len;
@@ -2289,7 +2269,7 @@ void aw_fel_spiflash_read(feldev_handle *dev,
             // printf("pos       = %d\r\n", pos);
             // printf("len       = %d\r\n", len);
             printf("copy_size = %d\r\n", copy_size);
-            memcpy((void*)buf8, (void*)&rxbuf[pos], copy_size);
+            memcpy((void*)buf8, (void*)&spibuf.rxbuf[pos], copy_size);
             buf8 += copy_size;
             pos  += copy_size;
             len  -= copy_size;
@@ -2301,7 +2281,7 @@ void aw_fel_spiflash_read(feldev_handle *dev,
             // printf("pos       = %d\r\n", pos);
             // printf("len       = %d\r\n", len);
             printf("copy_size = %d\r\n", copy_size);
-            memcpy((void*)buf8, (void*)&rxbuf[pos], copy_size);
+            memcpy((void*)buf8, (void*)&spibuf.rxbuf[pos], copy_size);
             buf8 += copy_size;
             pos = 0;
             len -= copy_size;
@@ -2309,7 +2289,8 @@ void aw_fel_spiflash_read(feldev_handle *dev,
         page_addr += 1;
     }
 
-    free(cmdbuf);
+    /* free memory */
+    aw_fel_spiflash_spibuf_free(&spibuf);
 	restore_sram(dev, backup);
 }
 
