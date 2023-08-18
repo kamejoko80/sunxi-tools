@@ -51,6 +51,8 @@ typedef unsigned char u8;
 #define PF_CFG_REG         *(volatile u32*)(GPIO_BASE + PF_CFG)
 #define PF_DAT_REG         *(volatile u32*)(GPIO_BASE + PF_DAT)
 
+#define SPI_CLK_CTL_REG     (0x04025000 + 0x24)  /* clock rate control register */
+
 #define TIME_OUT            (0xFFFFFF)
 
 /*
@@ -84,12 +86,26 @@ void spi_batch_data_transfer(u8 *buf,
     u8  *txbuf8;
     u32  cpsr;
     u32 timeout;
+    u32 spi_clk_rate_restore;
 
     txsize = (buf[1] << 8) | buf[0];
     rxsize = (buf[3] << 8) | buf[2];
 
     txbuf8 = &buf[4];
     rxbuf8 = &buf[4 + txsize];
+
+    /*
+     * Workaround read/write issue
+     *    large txsize -> CPU writing TXFIO too fast -> workaround increase sclk
+     *    large rxsize -> CPU reading RXFIO too slow -> workaround decrease sclk
+     */
+    spi_clk_rate_restore = readl(SPI_CLK_CTL_REG);
+
+    if(txsize > 64) {
+        writel(0x202, SPI_CLK_CTL_REG);
+    } else {
+        writel(0x302, SPI_CLK_CTL_REG);
+    }
 
     /* clear spi irq pending */
     writel(0xffffffff, spi_sta_reg);
@@ -166,6 +182,9 @@ void spi_batch_data_transfer(u8 *buf,
         PF_CFG_REG |= 1 << 24; // PF6 output
         PF_DAT_REG |= 1 << 6;  // PF6 is high
     }
+
+    /* restore SPI clock rate */
+    writel(spi_clk_rate_restore, SPI_CLK_CTL_REG);
 
     /* Restore CPSR */
     asm volatile("msr cpsr_c, %0" :: "r" (cpsr));
