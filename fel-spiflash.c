@@ -2268,7 +2268,7 @@ void aw_fel_spiflash_read(feldev_handle *dev,
             // printf("page_addr = %X\r\n", page_addr);
             // printf("pos       = %d\r\n", pos);
             // printf("len       = %d\r\n", len);
-            printf("copy_size = %d\r\n", copy_size);
+            // printf("copy_size = %d\r\n", copy_size);
             memcpy((void*)buf8, (void*)&spibuf.rxbuf[pos], copy_size);
             buf8 += copy_size;
             pos  += copy_size;
@@ -2280,7 +2280,7 @@ void aw_fel_spiflash_read(feldev_handle *dev,
             // printf("page_addr = %X\r\n", page_addr);
             // printf("pos       = %d\r\n", pos);
             // printf("len       = %d\r\n", len);
-            printf("copy_size = %d\r\n", copy_size);
+            //printf("copy_size = %d\r\n", copy_size);
             memcpy((void*)buf8, (void*)&spibuf.rxbuf[pos], copy_size);
             buf8 += copy_size;
             pos = 0;
@@ -2438,16 +2438,50 @@ static void aw_fel_spiflash_program_data_load(feldev_handle *dev, uint8_t *buf, 
     aw_fel_remotefunc_execute(dev, NULL);
 
     /* print data in cache (debugging) */
-    aw_fel_spiflash_read_from_cache(dev, F35SQA001G_PAGE_SIZE);
+    // aw_fel_spiflash_read_from_cache(dev, F35SQA001G_PAGE_SIZE);
 
     /* free memory */
     aw_fel_spiflash_spibuf_free(&spibuf);
 }
 
 /*
+ * Program execute
+ */
+static void aw_fel_spiflash_program_execute(feldev_handle *dev, uint32_t page_addr)
+{
+    soc_info_t *soc_info = dev->soc_info;
+
+    /* write enable */
+    aw_fel_spiflash_write_enable(dev);
+
+    /* program execute cmd: 0x10 dummy PA15-8 PA7-0 */
+    uint8_t cmdbuf[] = { 4, 0, 0, 0, 0x10, 0, 0x00, 0x00};
+
+    /* prepare page addr parameter */
+    cmdbuf[6] = (page_addr >> 8) & 0xff;
+    cmdbuf[7] = page_addr & 0xff;
+
+    /* Execute command */
+    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
+    aw_fel_remotefunc_execute(dev, NULL);
+
+    /* wait for busy flag */
+    aw_fel_spiflash_wait_for_busy(dev);
+}
+
+/*
+ * Page program
+ */
+static void aw_fel_spiflash_page_program(feldev_handle *dev, uint32_t page_addr, uint8_t *buf, size_t len)
+{
+    aw_fel_spiflash_program_data_load(dev, buf, len);
+    aw_fel_spiflash_program_execute(dev, page_addr);   
+}
+
+/*
  * Erase blocks of SPI flash memory
  */
-static int aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t page_addr, size_t block_cnt)
+static int aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t page_addr, size_t block_cnt, progress_cb_t progress)
 {
     soc_info_t *soc_info = dev->soc_info;
     spi_flash_info_t *flash_info = &f35sqa001g_spi_flash_info;
@@ -2482,13 +2516,14 @@ static int aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t page_addr, s
     cmdbuf[4] = flash_info->large_erase_cmd;
     cmdbuf[5] = 0x0; /* dummy */
 
+    progress_start(progress, block_cnt);
     while(block_cnt){
 
-        printf("Erase lock PA = %X\r\n", page_addr);
+        printf("Erase block PA = %X\r\n", page_addr);
 
         /* prepare page addr parameter */
-        cmdbuf[6] = (page_addr >> 8) & 0xf;;
-        cmdbuf[7] = page_addr & 0xf;
+        cmdbuf[6] = (page_addr >> 8) & 0xff;
+        cmdbuf[7] = page_addr & 0xff;
 
         /* Execute command */
         aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
@@ -2498,6 +2533,7 @@ static int aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t page_addr, s
         aw_fel_spiflash_wait_for_busy(dev);
 
         /* update page addr and block count */
+        progress_update(1);
         page_addr += 64;
         block_cnt--;
     }
@@ -2596,15 +2632,17 @@ void aw_fel_spiflash_write(feldev_handle *dev,
     prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
 
     /* test erase block 0 */
-    //aw_fel_spiflash_erase_block(dev, 0, 1);
+    aw_fel_spiflash_erase_block(dev, 0, 1, progress);
 
-    /* test cache */
-    // static void aw_fel_spiflash_program_data_load(feldev_handle *dev, uint8_t *buf, size_t len);
+    /* test program page 0 */
+    uint8_t buffer_0[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA};
+    aw_fel_spiflash_page_program(dev, 0, buffer_0, sizeof(buffer_0));
 
-    uint8_t buffer[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA};
-
-    aw_fel_spiflash_program_data_load(dev, buffer, sizeof(buffer));
-
+    /* test program page 1 */
+    uint8_t buffer_1[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x44, 0x33, 0x22, 0x11};
+    aw_fel_spiflash_page_program(dev, 1, buffer_1, sizeof(buffer_1));
+  
+  
     restore_sram(dev, backup);
 #else
 
