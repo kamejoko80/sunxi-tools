@@ -2510,9 +2510,6 @@ static int aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t page_addr, s
     status = aw_fel_spiflash_read_status(dev, SR1_ADDR);
     //printf("Protection status after = %X\r\n", status);
 
-    /* write enable */
-    aw_fel_spiflash_write_enable(dev);
-
     printf("start to erase block\r\n");
 
     /* Block erase command: 0xd8 dummy PA15-8 PA7-0 */
@@ -2525,8 +2522,11 @@ static int aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t page_addr, s
     progress_start(progress, block_cnt);
     while(block_cnt){
 
-        printf("Erase block PA = %X\r\n", page_addr);
+        /* write enable */
+        aw_fel_spiflash_write_enable(dev);
 
+        printf("Erase block PA = %X\r\n", page_addr);
+   
         /* prepare page addr parameter */
         cmdbuf[6] = (page_addr >> 8) & 0xff;
         cmdbuf[7] = page_addr & 0xff;
@@ -2648,12 +2648,12 @@ void aw_fel_spiflash_write(feldev_handle *dev,
     //uint8_t buffer_1[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x44, 0x33, 0x22, 0x11};
     //aw_fel_spiflash_page_program(dev, 7, buffer_1, sizeof(buffer_1));
   
-    uint8_t buffer_0[] = {0x22, 0x11, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA};
+    uint8_t buffer_0[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA};
     
-    for(int i = 0; i < 66; i++ ){
-        buffer_0[0] = i;
-        aw_fel_spiflash_page_program(dev, i, buffer_0, sizeof(buffer_0));
-    }
+    //for(int i = 0; i < 66; i++ ){
+    //    buffer_0[0] = i;
+    //    aw_fel_spiflash_page_program(dev, i, buffer_0, sizeof(buffer_0));
+    //}
    
     restore_sram(dev, backup);
 #else
