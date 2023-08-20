@@ -1472,6 +1472,11 @@ int main(int argc, char **argv)
 					      pflag_active ? progress_bar : NULL);
 			free(buf);
 			skip=3;
+        }else if (strcmp(argv[1], "spiflash-erase-blocks") == 0 && argc > 3) {
+            size_t block_cnt = strtoul(argv[3], NULL, 0);  
+			aw_fel_spiflash_erase_blocks(handle, strtoul(argv[2], NULL, 0), block_cnt,
+					      pflag_active ? progress_bar : NULL);
+			skip=3;            
 		} else {
 			pr_fatal("Invalid command %s\n", argv[1]);
 		}

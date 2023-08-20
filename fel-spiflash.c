@@ -2246,7 +2246,7 @@ void aw_fel_spiflash_read(feldev_handle *dev,
 		max_chunk_size = F35SQA001G_PAGE_SIZE;
 
     /* Calculate page_addr and first_post */
-    page_addr = (offset + 1) / max_chunk_size;
+    page_addr = offset / max_chunk_size;
     pos = offset % max_chunk_size;
 
     progress_start(progress, len);
@@ -2328,7 +2328,7 @@ static void aw_fel_spiflash_write_enable(feldev_handle *dev)
     /* execure spi */
     aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
     aw_fel_remotefunc_execute(dev, NULL);
-    
+
     /* make sure WEL is set */
     uint8_t status;
     uint32_t timeout = 0xFFFFFF;
@@ -2379,7 +2379,7 @@ static uint8_t aw_fel_spiflash_wait_for_busy(feldev_handle *dev)
         if(!timeout){
             printf("Timeout! wait for busy\r\n");
         }
-        timeout--;        
+        timeout--;
     } while(status & 0x1);
 }
 
@@ -2474,7 +2474,7 @@ static void aw_fel_spiflash_program_execute(feldev_handle *dev, uint32_t page_ad
     /* prepare page addr parameter */
     cmdbuf[6] = (page_addr >> 8) & 0xff;
     cmdbuf[7] = page_addr & 0xff;
-    
+
     /* Execute command */
     aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
     aw_fel_remotefunc_execute(dev, NULL);
@@ -2489,7 +2489,7 @@ static void aw_fel_spiflash_program_execute(feldev_handle *dev, uint32_t page_ad
 static void aw_fel_spiflash_page_program(feldev_handle *dev, uint32_t page_addr, uint8_t *buf, size_t len)
 {
     aw_fel_spiflash_program_data_load(dev, buf, len);
-    aw_fel_spiflash_program_execute(dev, page_addr);   
+    aw_fel_spiflash_program_execute(dev, page_addr);
 }
 
 /*
@@ -2510,7 +2510,7 @@ static int aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t page_addr, s
     status = aw_fel_spiflash_read_status(dev, SR1_ADDR);
     //printf("Protection status after = %X\r\n", status);
 
-    printf("start to erase block\r\n");
+    printf("Erase block[s]:\r\n");
 
     /* Block erase command: 0xd8 dummy PA15-8 PA7-0 */
     uint8_t cmdbuf[] = { 4, 0, 0, 0, 0x00, 0, 0x00, 0x00};
@@ -2525,8 +2525,6 @@ static int aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t page_addr, s
         /* write enable */
         aw_fel_spiflash_write_enable(dev);
 
-        printf("Erase block PA = %X\r\n", page_addr);
-   
         /* prepare page addr parameter */
         cmdbuf[6] = (page_addr >> 8) & 0xff;
         cmdbuf[7] = page_addr & 0xff;
@@ -2548,87 +2546,112 @@ static int aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t page_addr, s
 }
 
 /*
- * Write data to the SPI flash. Use the first 4KiB of SRAM as the data buffer.
+ * block read (maximum 128K bytes)
  */
-
-#define CMD_WRITE_ENABLE 0x06
-
-void aw_fel_spiflash_write_helper(feldev_handle *dev,
-				  uint32_t offset, void *buf, size_t len,
-				  size_t erase_size, uint8_t erase_cmd,
-				  size_t program_size, uint8_t program_cmd)
+static aw_fel_spiflash_block_read(feldev_handle *dev, uint32_t page_addr, uint8_t *buf, size_t len)
 {
-	soc_info_t *soc_info = dev->soc_info;
-	uint8_t *buf8 = (uint8_t *)buf;
-	size_t max_chunk_size = soc_info->scratch_addr - soc_info->spl_addr;
-	size_t cmd_idx;
+    soc_info_t *soc_info = dev->soc_info;
+    spi_buf spibuf;
 
-	if (max_chunk_size > 0x1000)
-		max_chunk_size = 0x1000;
-	uint8_t *cmdbuf = malloc(max_chunk_size);
-	cmd_idx = 0;
+    if((NULL==buf) || (len==0)) {
+        return;
+    }
 
-	prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
+    if(len > (64*F35SQA001G_PAGE_SIZE)){
+        printf("Warning! len should not greater than block size %d\r\n", 64*F35SQA001G_PAGE_SIZE);
+        len = 64*F35SQA001G_PAGE_SIZE;
+    }
 
-	while (len > 0) {
-		while (len > 0 && max_chunk_size - cmd_idx > program_size + 64) {
-			if (offset % erase_size == 0) {
-				/* Emit write enable command */
-				cmdbuf[cmd_idx++] = 0;
-				cmdbuf[cmd_idx++] = 1;
-				cmdbuf[cmd_idx++] = CMD_WRITE_ENABLE;
-				/* Emit erase command */
-				cmdbuf[cmd_idx++] = 0;
-				cmdbuf[cmd_idx++] = 4;
-				cmdbuf[cmd_idx++] = erase_cmd;
-				cmdbuf[cmd_idx++] = offset >> 16;
-				cmdbuf[cmd_idx++] = offset >> 8;
-				cmdbuf[cmd_idx++] = offset;
-				/* Emit wait for completion */
-				cmdbuf[cmd_idx++] = 0xFF;
-				cmdbuf[cmd_idx++] = 0xFF;
-			}
-			/* Emit write enable command */
-			cmdbuf[cmd_idx++] = 0;
-			cmdbuf[cmd_idx++] = 1;
-			cmdbuf[cmd_idx++] = CMD_WRITE_ENABLE;
-			/* Emit page program command */
-			size_t write_count = program_size;
-			if (write_count > len)
-				write_count = len;
-			cmdbuf[cmd_idx++] = (4 + write_count) >> 8;
-			cmdbuf[cmd_idx++] = 4 + write_count;
-			cmdbuf[cmd_idx++] = program_cmd;
-			cmdbuf[cmd_idx++] = offset >> 16;
-			cmdbuf[cmd_idx++] = offset >> 8;
-			cmdbuf[cmd_idx++] = offset;
-			memcpy(cmdbuf + cmd_idx, buf8, write_count);
-			cmd_idx += write_count;
-			buf8    += write_count;
-			len     -= write_count;
-			offset  += write_count;
-			/* Emit wait for completion */
-			cmdbuf[cmd_idx++] = 0xFF;
-			cmdbuf[cmd_idx++] = 0xFF;
-		}
-		/* Emit the end marker */
-		cmdbuf[cmd_idx++] = 0;
-		cmdbuf[cmd_idx++] = 0;
+    /*           [4]     [5]    [6]    [7] ...
+     * command: 0x03   CA15-8  CA7-0  Dummy  D0 D1 D2...
+     */
 
-		/* Flush */
-		aw_fel_write(dev, cmdbuf, soc_info->spl_addr, cmd_idx);
-		aw_fel_remotefunc_execute(dev, NULL);
-		cmd_idx = 0;
-	}
+    uint8_t cmd[] = {0x03, 0x00, 0x00, 0};
+    aw_fel_spiflash_spibuf_create(&spibuf, cmd, sizeof(cmd), 0, F35SQA001G_PAGE_SIZE);
 
-	free(cmdbuf);
+    /* read block */
+    for(uint32_t i=0; i<64; i++){
+        /* reach to cache */
+        aw_fel_spiflash_read_to_cache(dev, page_addr + i);
+
+        /* read data from cache */
+        aw_fel_write(dev, spibuf.buf, soc_info->spl_addr, spibuf.len);
+        aw_fel_remotefunc_execute(dev, NULL);
+        aw_fel_read(dev, soc_info->spl_addr, spibuf.buf, spibuf.len);
+
+        /* copy buffer */
+        if(len > F35SQA001G_PAGE_SIZE){
+            memcpy((void*)buf, (void*)spibuf.rxbuf, F35SQA001G_PAGE_SIZE);
+            buf += F35SQA001G_PAGE_SIZE;
+            len -= F35SQA001G_PAGE_SIZE;
+        } else if (len > 0) {
+            memcpy((void*)buf, (void*)spibuf.rxbuf, len);
+            buf += len;
+            len -= len;
+            break;
+        }
+    }
+
+    /* free memory */
+    aw_fel_spiflash_spibuf_free(&spibuf);
 }
 
+/*
+ * Block programming
+ */
+static aw_fel_spiflash_block_program(feldev_handle *dev, uint32_t page_addr, uint8_t *buf, size_t len)
+{
+    if((NULL==buf) || (len==0)) {
+        return;
+    }
+
+    if(len > (64*F35SQA001G_PAGE_SIZE)){
+        printf("Warning! len should not greater than block size %d\r\n", 64*F35SQA001G_PAGE_SIZE);
+        len = 64*F35SQA001G_PAGE_SIZE;
+    }
+
+    while(len) {
+        if(len > F35SQA001G_PAGE_SIZE) {
+            aw_fel_spiflash_page_program(dev, page_addr, buf, F35SQA001G_PAGE_SIZE);
+            buf += F35SQA001G_PAGE_SIZE;
+            len -= F35SQA001G_PAGE_SIZE;
+        }else {
+            aw_fel_spiflash_page_program(dev, page_addr, buf, len);
+            buf += len;
+            len -= len;
+        }
+        page_addr += 1;
+    }
+}
+
+/*
+ *  flash programming algorithm
+ *     ______   ___
+ *    |      |   |
+ * b0 |      |   |  offset
+ *    |______|   |        _______ backup 1 start
+ *    |      |   |
+ * b2 |      |  -|- block start = (offset / 128K), block_offset_1 = offset % 128K
+ *    |______|   |
+ * .  |      |   |
+ * .  |      |   |  len
+ *    |______|   |
+ *    |      |  _|_ block end = (offset + len) / 128K, block_offset_2 = (offset + len) % 128K
+ * bn |      |   |
+ *    |______|  _|___________
+ *                            backup 2 end
+ *    backup 1:
+ *       • start page_addr = block start(PA)
+ *       • end   page_addr = offset / 2K
+ *       • page offset     = offset % 2K
+ *
+ *
+ */
 void aw_fel_spiflash_write(feldev_handle *dev,
 			   uint32_t offset, void *buf, size_t len,
 			   progress_cb_t progress)
 {
-#if 1
+
     soc_info_t *soc_info = dev->soc_info;
     void *backup = backup_sram(dev);
 
@@ -2637,74 +2660,124 @@ void aw_fel_spiflash_write(feldev_handle *dev,
 
     prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
 
-    /* test erase block 0 */
-    aw_fel_spiflash_erase_block(dev, 0, 2, progress);
+    uint32_t block_start, block_end, block_cnt, block_offset_1, block_offset_2, copy_len;
+    uint8_t *block_start_buf = NULL, *block_end_buf = NULL;
+    uint8_t *buf8 = (uint8_t *)buf;
 
-    /* test program page 0 @ block 0 */
-    //uint8_t buffer_0[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA};
-    //aw_fel_spiflash_page_program(dev, 0, buffer_0, sizeof(buffer_0));
+    block_start = offset / (64 * F35SQA001G_PAGE_SIZE);
+    block_end = (offset + len) / (64 * F35SQA001G_PAGE_SIZE);
+    block_cnt = block_end - block_start + 1;
+    block_offset_1 = offset % (64 * F35SQA001G_PAGE_SIZE);
+    block_offset_2 = (offset + len) % (64 * F35SQA001G_PAGE_SIZE);
 
-    /* test program page 7 @ block 0 */
-    //uint8_t buffer_1[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x44, 0x33, 0x22, 0x11};
-    //aw_fel_spiflash_page_program(dev, 7, buffer_1, sizeof(buffer_1));
-  
-    uint8_t buffer_0[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA};
-    
-    //for(int i = 0; i < 66; i++ ){
-    //    buffer_0[0] = i;
-    //    aw_fel_spiflash_page_program(dev, i, buffer_0, sizeof(buffer_0));
-    //}
-   
+    printf("len            = %d\r\n", len);
+    printf("block start    = %d\r\n", block_start);
+    printf("block end      = %d\r\n", block_end);
+    printf("block_cnt      = %d\r\n", block_cnt);
+    printf("block_offset_1 = %d\r\n", block_offset_1);
+    printf("block_offset_2 = %d\r\n", block_offset_2);
+
+    if(block_cnt > 1) {
+        /* allocate backup buffers */
+        block_start_buf = malloc(64 * F35SQA001G_PAGE_SIZE);
+        block_end_buf = malloc(64 * F35SQA001G_PAGE_SIZE);
+        /* read backup 1 */
+        aw_fel_spiflash_block_read(dev, block_start * 64, block_start_buf, 64 * F35SQA001G_PAGE_SIZE);
+        /* read backup 2 */
+        aw_fel_spiflash_block_read(dev, block_end * 64, block_end_buf, 64 * F35SQA001G_PAGE_SIZE);
+
+        /* erase blocks */
+        aw_fel_spiflash_erase_block(dev, block_start * 64, block_cnt, progress);
+
+        /* programming process */
+        progress_start(progress, len);
+
+        /* update backup 1 buf and program */
+        copy_len = (64 * F35SQA001G_PAGE_SIZE) - block_offset_1;
+        memcpy((void *)&block_start_buf[block_offset_1], (void *)buf8, copy_len);
+        buf8 += copy_len;
+        len -= copy_len;
+
+        /* block program process */
+        printf("Program block[s]:\r\n");
+
+        /* program block start */
+        aw_fel_spiflash_block_program(dev, block_start * 64, block_start_buf, 64 * F35SQA001G_PAGE_SIZE);
+        progress_update(copy_len);
+
+        /* program other blocks */
+        for(uint32_t i = block_start + 1; i < block_end; i++) {
+            aw_fel_spiflash_block_program(dev, i*64, buf8, 64 * F35SQA001G_PAGE_SIZE);
+            buf8 += 64 * F35SQA001G_PAGE_SIZE;
+            len -= 64 * F35SQA001G_PAGE_SIZE;
+            progress_update(64 * F35SQA001G_PAGE_SIZE);
+        }
+
+        /* update backup 2 buf and program */
+        copy_len = block_offset_2;
+        memcpy((void *)block_end_buf, (void *)buf8, copy_len);
+        buf8 += copy_len;
+        len -= copy_len;
+
+        /* program last block */
+        aw_fel_spiflash_block_program(dev, block_end * 64, block_end_buf, 64 * F35SQA001G_PAGE_SIZE);
+        progress_update(copy_len);
+
+    } else {
+        /* allocate backup buffer */
+        block_start_buf = malloc(64 * F35SQA001G_PAGE_SIZE);
+
+        /* read backup 1 */
+        aw_fel_spiflash_block_read(dev, block_start * 64, block_start_buf, 64 * F35SQA001G_PAGE_SIZE);
+
+        /* erase blocks */
+        aw_fel_spiflash_erase_block(dev, block_start * 64, block_cnt, progress);
+
+        /* programming process */
+        progress_start(progress, len);
+
+        /* update backup 1 buf and program */
+        copy_len = len - block_offset_1 + 1;
+        memcpy((void *)&block_start_buf[block_offset_1], (void *)buf8, copy_len);
+        buf8 += copy_len;
+        len -= copy_len;
+
+        /* block program process */
+        printf("Program block[s]:\r\n");
+
+        /* program block start */
+        aw_fel_spiflash_block_program(dev, block_start * 64, block_start_buf, 64 * F35SQA001G_PAGE_SIZE);
+        progress_update(copy_len);
+    }
+
+    if(block_start_buf)
+        free(block_start_buf);
+
+    if(block_end_buf)
+        free(block_end_buf);
+
     restore_sram(dev, backup);
-#else
+}
 
-	void *backup = backup_sram(dev);
-	uint8_t *buf8 = (uint8_t *)buf;
-
-	spi_flash_info_t *flash_info = &default_spi_flash_info; /* FIXME */
-
-	if ((offset % flash_info->small_erase_size) != 0) {
-		fprintf(stderr, "aw_fel_spiflash_write: 'addr' must be %d bytes aligned\n",
-		        flash_info->small_erase_size);
-		exit(1);
-	}
+/*
+ * Erase spi flash
+ */
+void aw_fel_spiflash_erase_blocks(feldev_handle *dev,
+			   uint32_t page_addr, size_t block_cnt,
+			   progress_cb_t progress)
+{
+    soc_info_t *soc_info = dev->soc_info;
+    void *backup = backup_sram(dev);
 
 	if (!spi0_init(dev))
 		return;
 
-	progress_start(progress, len);
-	while (len > 0) {
-		size_t write_count;
-		if ((offset % flash_info->large_erase_size) != 0 ||
-							len < flash_info->large_erase_size) {
+    prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
 
-			write_count = flash_info->small_erase_size;
-			if (write_count > len)
-				write_count = len;
-			aw_fel_spiflash_write_helper(dev, offset, buf8,
-				write_count,
-				flash_info->small_erase_size, flash_info->small_erase_cmd,
-				flash_info->program_size, flash_info->program_cmd);
-		} else {
-			write_count = flash_info->large_erase_size;
-			if (write_count > len)
-				write_count = len;
-			aw_fel_spiflash_write_helper(dev, offset, buf8,
-				write_count,
-				flash_info->large_erase_size, flash_info->large_erase_cmd,
-				flash_info->program_size, flash_info->program_cmd);
-		}
+    /* erase blocks */
+    aw_fel_spiflash_erase_block(dev, page_addr, block_cnt, progress);
 
-		len    -= write_count;
-		offset += write_count;
-		buf8   += write_count;
-		progress_update(write_count);
-	}
-
-	restore_sram(dev, backup);
-
-#endif
-
+    restore_sram(dev, backup);
 }
 
 /*
@@ -2763,5 +2836,6 @@ void aw_fel_spiflash_help(void)
 {
 	printf("	spiflash-info			Retrieves basic information\n"
 	       "	spiflash-read addr length file	Write SPI flash contents into file\n"
-	       "	spiflash-write addr file	Store file contents into SPI flash\n");
+	       "	spiflash-write addr file	    Store file contents into SPI flash\n"
+           "	spiflash-erase-blocks page_addr block_cnt Erase SPI flash blocks\n");
 }
