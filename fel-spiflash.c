@@ -2181,8 +2181,8 @@ static void aw_fel_spiflash_read_to_cache(feldev_handle *dev, uint32_t page_addr
 
     /* prepare command */
     cmdbuf[4] = 0x13;
-    cmdbuf[6] = (page_addr >> 8) & 0xf;;
-    cmdbuf[7] = page_addr & 0xf;
+    cmdbuf[6] = (page_addr >> 8) & 0xff;
+    cmdbuf[7] = page_addr & 0xff;
 
     /* execure spi */
     aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
@@ -2295,21 +2295,6 @@ void aw_fel_spiflash_read(feldev_handle *dev,
 }
 
 /*
- * Write enable command
- */
-static void aw_fel_spiflash_write_enable(feldev_handle *dev)
-{
-    soc_info_t *soc_info = dev->soc_info;
-
-    /* write enable command: 0x06 */
-    uint8_t cmdbuf[] = { 1, 0, 0, 0, 0x06};
-
-    /* execure spi */
-    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
-    aw_fel_remotefunc_execute(dev, NULL);
-}
-
-/*
  * Read status command
  */
 static uint8_t aw_fel_spiflash_read_status(feldev_handle *dev, uint8_t sta_addr)
@@ -2328,6 +2313,32 @@ static uint8_t aw_fel_spiflash_read_status(feldev_handle *dev, uint8_t sta_addr)
     aw_fel_read(dev, soc_info->spl_addr, cmdbuf, sizeof(cmdbuf));
 
     return cmdbuf[6];
+}
+
+/*
+ * Write enable command
+ */
+static void aw_fel_spiflash_write_enable(feldev_handle *dev)
+{
+    soc_info_t *soc_info = dev->soc_info;
+
+    /* write enable command: 0x06 */
+    uint8_t cmdbuf[] = { 1, 0, 0, 0, 0x06};
+
+    /* execure spi */
+    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
+    aw_fel_remotefunc_execute(dev, NULL);
+    
+    /* make sure WEL is set */
+    uint8_t status;
+    uint32_t timeout = 0xFFFFFF;
+    do {
+        status = aw_fel_spiflash_read_status(dev, SR3_ADDR);
+        if(!timeout){
+            printf("Timeout! WEL is not set\r\n");
+        }
+        timeout--;
+    }while(!(status & 0x2));
 }
 
 /*
@@ -2355,9 +2366,9 @@ static void aw_fel_spiflash_write_status(feldev_handle *dev, uint8_t sta_addr, u
 static uint8_t aw_fel_spiflash_wait_for_busy(feldev_handle *dev)
 {
     uint8_t status;
-
+    uint32_t timeout = 0xFFFFFF;
     do {
-        delay();
+        // delay();
         status = aw_fel_spiflash_read_status(dev, SR3_ADDR);
         if(status & 0x8){
             printf("Warning! P-FAIL occured\r\n");
@@ -2365,9 +2376,12 @@ static uint8_t aw_fel_spiflash_wait_for_busy(feldev_handle *dev)
         if(status & 0x4){
             printf("Warning! E-FAIL occured\r\n");
         }
+        if(!timeout){
+            printf("Timeout! wait for busy\r\n");
+        }
+        timeout--;        
     } while(status & 0x1);
 }
-
 
 /*
  * read data from cache (for debuging only)
@@ -2390,7 +2404,7 @@ static void aw_fel_spiflash_read_from_cache(feldev_handle *dev, size_t len)
     aw_fel_read(dev, soc_info->spl_addr, spibuf.buf, spibuf.len);
 
     /* print data from cache */
-    printf("Read data from spi cache:");
+    printf("\r\nRead data from spi cache:");
     size_t i;
     for(int i=0; i < len; i++) {
         if(!(i % 16)) {
@@ -2438,7 +2452,7 @@ static void aw_fel_spiflash_program_data_load(feldev_handle *dev, uint8_t *buf, 
     aw_fel_remotefunc_execute(dev, NULL);
 
     /* print data in cache (debugging) */
-    // aw_fel_spiflash_read_from_cache(dev, F35SQA001G_PAGE_SIZE);
+    //aw_fel_spiflash_read_from_cache(dev, F35SQA001G_PAGE_SIZE);
 
     /* free memory */
     aw_fel_spiflash_spibuf_free(&spibuf);
@@ -2460,7 +2474,7 @@ static void aw_fel_spiflash_program_execute(feldev_handle *dev, uint32_t page_ad
     /* prepare page addr parameter */
     cmdbuf[6] = (page_addr >> 8) & 0xff;
     cmdbuf[7] = page_addr & 0xff;
-
+    
     /* Execute command */
     aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
     aw_fel_remotefunc_execute(dev, NULL);
@@ -2498,14 +2512,6 @@ static int aw_fel_spiflash_erase_block(feldev_handle *dev, uint32_t page_addr, s
 
     /* write enable */
     aw_fel_spiflash_write_enable(dev);
-
-    /* read status and check WEL bit */
-    status = aw_fel_spiflash_read_status(dev, SR3_ADDR);
-
-    if(!(status & 0x2)) {
-        printf("Error! WEL bit is not set\r\n");
-        return -1;
-    }
 
     printf("start to erase block\r\n");
 
@@ -2632,17 +2638,23 @@ void aw_fel_spiflash_write(feldev_handle *dev,
     prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
 
     /* test erase block 0 */
-    aw_fel_spiflash_erase_block(dev, 0, 1, progress);
+    aw_fel_spiflash_erase_block(dev, 0, 2, progress);
 
-    /* test program page 0 */
-    uint8_t buffer_0[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA};
-    aw_fel_spiflash_page_program(dev, 0, buffer_0, sizeof(buffer_0));
+    /* test program page 0 @ block 0 */
+    //uint8_t buffer_0[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA};
+    //aw_fel_spiflash_page_program(dev, 0, buffer_0, sizeof(buffer_0));
 
-    /* test program page 1 */
-    uint8_t buffer_1[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x44, 0x33, 0x22, 0x11};
-    aw_fel_spiflash_page_program(dev, 1, buffer_1, sizeof(buffer_1));
+    /* test program page 7 @ block 0 */
+    //uint8_t buffer_1[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x44, 0x33, 0x22, 0x11};
+    //aw_fel_spiflash_page_program(dev, 7, buffer_1, sizeof(buffer_1));
   
-  
+    uint8_t buffer_0[] = {0x22, 0x11, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA};
+    
+    for(int i = 0; i < 66; i++ ){
+        buffer_0[0] = i;
+        aw_fel_spiflash_page_program(dev, i, buffer_0, sizeof(buffer_0));
+    }
+   
     restore_sram(dev, backup);
 #else
 
