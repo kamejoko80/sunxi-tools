@@ -2657,7 +2657,6 @@ void aw_fel_spiflash_write(feldev_handle *dev,
 			   uint32_t offset, void *buf, size_t len,
 			   progress_cb_t progress)
 {
-
     soc_info_t *soc_info = dev->soc_info;
     void *backup = backup_sram(dev);
 
@@ -2672,89 +2671,66 @@ void aw_fel_spiflash_write(feldev_handle *dev,
 
     block_start = offset / (64 * F35SQA001G_PAGE_SIZE);
     block_end = (offset + len) / (64 * F35SQA001G_PAGE_SIZE);
-    block_cnt = block_end - block_start + 1;
     block_offset_1 = offset % (64 * F35SQA001G_PAGE_SIZE);
     block_offset_2 = (offset + len) % (64 * F35SQA001G_PAGE_SIZE);
+
+    if(block_offset_2 == 0){
+        block_cnt = block_end - block_start - 1;
+    }else {
+        block_cnt = block_end - block_start;
+    }
 
     printf("len            = %d\r\n", len);
     printf("block start    = %d\r\n", block_start);
     printf("block end      = %d\r\n", block_end);
-    printf("block_cnt      = %d\r\n", block_cnt);
     printf("block_offset_1 = %d\r\n", block_offset_1);
     printf("block_offset_2 = %d\r\n", block_offset_2);
+    printf("block cnt      = %d\r\n", block_cnt);
 
-    if(block_cnt > 1) {
-        /* allocate backup buffers */
-        block_start_buf = malloc(64 * F35SQA001G_PAGE_SIZE);
-        block_end_buf = malloc(64 * F35SQA001G_PAGE_SIZE);
-        /* read backup 1 */
-        aw_fel_spiflash_block_read(dev, block_start * 64, block_start_buf, 64 * F35SQA001G_PAGE_SIZE);
-        /* read backup 2 */
-        aw_fel_spiflash_block_read(dev, block_end * 64, block_end_buf, 64 * F35SQA001G_PAGE_SIZE);
+    /* allocate backup buffers */
+    block_start_buf = malloc(64 * F35SQA001G_PAGE_SIZE);
+    block_end_buf = malloc(64 * F35SQA001G_PAGE_SIZE);
+    /* read backup 1 */
+    aw_fel_spiflash_block_read(dev, block_start * 64, block_start_buf, 64 * F35SQA001G_PAGE_SIZE);
+    /* read backup 2 */
+    aw_fel_spiflash_block_read(dev, block_end * 64, block_end_buf, 64 * F35SQA001G_PAGE_SIZE);
 
-        /* erase blocks */
-        aw_fel_spiflash_erase_block(dev, block_start * 64, block_cnt, progress);
+    /* erase blocks */
+    aw_fel_spiflash_erase_block(dev, block_start * 64, block_cnt, progress);
 
-        /* programming process */
-        progress_start(progress, len);
+    /* programming process */
+    progress_start(progress, len);
 
-        /* update backup 1 buf and program */
-        copy_len = (64 * F35SQA001G_PAGE_SIZE) - block_offset_1;
-        memcpy((void *)&block_start_buf[block_offset_1], (void *)buf8, copy_len);
-        buf8 += copy_len;
-        len -= copy_len;
+    /* update backup 1 buf and program */
+    copy_len = (64 * F35SQA001G_PAGE_SIZE) - block_offset_1;
+    memcpy((void *)&block_start_buf[block_offset_1], (void *)buf8, copy_len);
+    buf8 += copy_len;
+    len -= copy_len;
 
-        /* block program process */
-        printf("Program block[s]:\r\n");
+    /* block program process */
+    printf("Program block[s]:\r\n");
 
-        /* program block start */
-        aw_fel_spiflash_block_program(dev, block_start * 64, block_start_buf, 64 * F35SQA001G_PAGE_SIZE);
-        progress_update(copy_len);
+    /* program block start */
+    aw_fel_spiflash_block_program(dev, block_start * 64, block_start_buf, 64 * F35SQA001G_PAGE_SIZE);
+    progress_update(copy_len);
 
-        /* program other blocks */
-        for(uint32_t i = block_start + 1; i < block_end; i++) {
-            aw_fel_spiflash_block_program(dev, i*64, buf8, 64 * F35SQA001G_PAGE_SIZE);
-            buf8 += 64 * F35SQA001G_PAGE_SIZE;
-            len -= 64 * F35SQA001G_PAGE_SIZE;
-            progress_update(64 * F35SQA001G_PAGE_SIZE);
-        }
-
-        /* update backup 2 buf and program */
-        copy_len = block_offset_2;
-        memcpy((void *)block_end_buf, (void *)buf8, copy_len);
-        buf8 += copy_len;
-        len -= copy_len;
-
-        /* program last block */
-        aw_fel_spiflash_block_program(dev, block_end * 64, block_end_buf, 64 * F35SQA001G_PAGE_SIZE);
-        progress_update(copy_len);
-
-    } else {
-        /* allocate backup buffer */
-        block_start_buf = malloc(64 * F35SQA001G_PAGE_SIZE);
-
-        /* read backup 1 */
-        aw_fel_spiflash_block_read(dev, block_start * 64, block_start_buf, 64 * F35SQA001G_PAGE_SIZE);
-
-        /* erase blocks */
-        aw_fel_spiflash_erase_block(dev, block_start * 64, block_cnt, progress);
-
-        /* programming process */
-        progress_start(progress, len);
-
-        /* update backup 1 buf and program */
-        copy_len = len - block_offset_1 + 1;
-        memcpy((void *)&block_start_buf[block_offset_1], (void *)buf8, copy_len);
-        buf8 += copy_len;
-        len -= copy_len;
-
-        /* block program process */
-        printf("Program block[s]:\r\n");
-
-        /* program block start */
-        aw_fel_spiflash_block_program(dev, block_start * 64, block_start_buf, 64 * F35SQA001G_PAGE_SIZE);
-        progress_update(copy_len);
+    /* program other blocks */
+    for(uint32_t i = block_start + 1; i < block_end; i++) {
+        aw_fel_spiflash_block_program(dev, i*64, buf8, 64 * F35SQA001G_PAGE_SIZE);
+        buf8 += 64 * F35SQA001G_PAGE_SIZE;
+        len -= 64 * F35SQA001G_PAGE_SIZE;
+        progress_update(64 * F35SQA001G_PAGE_SIZE);
     }
+
+    /* update backup 2 buf and program */
+    copy_len = block_offset_2;
+    memcpy((void *)block_end_buf, (void *)buf8, copy_len);
+    buf8 += copy_len;
+    len -= copy_len;
+
+    /* program last block */
+    aw_fel_spiflash_block_program(dev, block_end * 64, block_end_buf, 64 * F35SQA001G_PAGE_SIZE);
+    progress_update(copy_len);
 
     if(block_start_buf)
         free(block_start_buf);
