@@ -2048,7 +2048,7 @@ static void prepare_spi_batch_data_transfer(feldev_handle *dev, uint32_t buf)
 }
 
 #define F35SQA001G_PAGE_SIZE (2048)
-//#define USE_PROGRAM_LOAD_QUAD 
+//#define USE_PROGRAM_LOAD_QUAD //It doesn't work
 
 #define SR1_ADDR (0xA0) /* Protection register */
 #define SR2_ADDR (0xB0) /* Configuration register */
