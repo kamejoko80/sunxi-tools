@@ -2675,9 +2675,9 @@ void aw_fel_spiflash_write(feldev_handle *dev,
     block_offset_2 = (offset + len) % (64 * F35SQA001G_PAGE_SIZE);
 
     if(block_offset_2 == 0){
-        block_cnt = block_end - block_start - 1;
-    }else {
         block_cnt = block_end - block_start;
+    }else {
+        block_cnt = block_end - block_start + 1;
     }
 
     printf("len            = %d\r\n", len);
@@ -2723,14 +2723,16 @@ void aw_fel_spiflash_write(feldev_handle *dev,
     }
 
     /* update backup 2 buf and program */
-    copy_len = block_offset_2;
-    memcpy((void *)block_end_buf, (void *)buf8, copy_len);
-    buf8 += copy_len;
-    len -= copy_len;
+    if(block_offset_2) {
+        copy_len = block_offset_2;
+        memcpy((void *)block_end_buf, (void *)buf8, copy_len);
+        buf8 += copy_len;
+        len -= copy_len;
 
-    /* program last block */
-    aw_fel_spiflash_block_program(dev, block_end * 64, block_end_buf, 64 * F35SQA001G_PAGE_SIZE);
-    progress_update(copy_len);
+        /* program last block */
+        aw_fel_spiflash_block_program(dev, block_end * 64, block_end_buf, 64 * F35SQA001G_PAGE_SIZE);
+        progress_update(copy_len);
+    }
 
     if(block_start_buf)
         free(block_start_buf);
