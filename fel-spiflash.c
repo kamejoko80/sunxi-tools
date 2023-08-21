@@ -2003,8 +2003,6 @@ static void restore_sram(feldev_handle *dev, void *buf)
 #define SUN8I_SPI0_TXD              (spi_base(dev) + 0x0200) // SPI TX Data Register
 #define SUN8I_SPI0_RXD              (spi_base(dev) + 0x0300) // SPI RX Data Register
 
-
-
 static void prepare_spi_batch_data_transfer(feldev_handle *dev, uint32_t buf)
 {
     if(spi_is_sun8i(dev)) {
@@ -2170,6 +2168,69 @@ static void aw_fel_spiflash_spibuf_free(spi_buf *spibuf)
 }
 
 /*
+ * Read status command
+ */
+static uint8_t aw_fel_spiflash_read_status(feldev_handle *dev, uint8_t sta_addr)
+{
+    soc_info_t *soc_info = dev->soc_info;
+
+    /* get feature command: 0x0F sta_addr S7-0 */
+    uint8_t cmdbuf[] = { 2, 0, 1, 0, 0x0F, 0x00, 0x00};
+
+    /* prepare command */
+    cmdbuf[5] = sta_addr;
+
+    /* execure spi */
+    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
+    aw_fel_remotefunc_execute(dev, NULL);
+    aw_fel_read(dev, soc_info->spl_addr, cmdbuf, sizeof(cmdbuf));
+
+    return cmdbuf[6];
+}
+
+/*
+ * Write status command
+ */
+static void aw_fel_spiflash_write_status(feldev_handle *dev, uint8_t sta_addr, uint8_t value)
+{
+    soc_info_t *soc_info = dev->soc_info;
+
+    /* set feature command: 0x1F sta_addr S7-0 */
+    uint8_t cmdbuf[] = { 3, 0, 0, 0, 0x1F, 0x00, 0x00};
+
+    /* prepare command */
+    cmdbuf[5] = sta_addr;
+    cmdbuf[6] = value;
+
+    /* execure spi */
+    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
+    aw_fel_remotefunc_execute(dev, NULL);
+}
+
+/*
+ * Wait for SPI flash operation
+ */
+static uint8_t aw_fel_spiflash_wait_for_busy(feldev_handle *dev)
+{
+    uint8_t status;
+    uint32_t timeout = 0xFFFFFF;
+    do {
+        // delay();
+        status = aw_fel_spiflash_read_status(dev, SR3_ADDR);
+        if(status & 0x8){
+            printf("Warning! P-FAIL occured\r\n");
+        }
+        if(status & 0x4){
+            printf("Warning! E-FAIL occured\r\n");
+        }
+        if(!timeout){
+            printf("Timeout! wait for busy\r\n");
+        }
+        timeout--;
+    } while(status & 0x1);
+}
+
+/*
  * Read spi flash cache
  */
 static void aw_fel_spiflash_read_to_cache(feldev_handle *dev, uint32_t page_addr)
@@ -2203,10 +2264,11 @@ void aw_fel_spiflash_read(feldev_handle *dev,
     uint32_t page_addr, pos, copy_size;
 
     /*
-     * read data from cache: 0x03 CA15-8 CA7-0 Dummy D0 D1 D2...
+     * read data from cache(1): 0x03 CA15-8 CA7-0 Dummy D0 D1 D2...
+     * read data from cache(4): 0x6b CA15-8 CA7-0 Dummy D0 D1 D2...
      */
     spi_buf spibuf;
-    uint8_t cmd[] = {0x03, 0x00, 0x00, 0};
+    uint8_t cmd[] = {0x6b, 0x00, 0x00, 0};
     aw_fel_spiflash_spibuf_create(&spibuf, cmd, sizeof(cmd), 0, F35SQA001G_PAGE_SIZE);
 
     if(NULL == spibuf.buf){
@@ -2240,6 +2302,13 @@ void aw_fel_spiflash_read(feldev_handle *dev,
 		return;
 
     prepare_spi_batch_data_transfer(dev, soc_info->spl_addr);
+
+    /* set QE bit */
+    if(0x6b == cmd[0]) {
+        uint8_t config = aw_fel_spiflash_read_status(dev, SR2_ADDR);
+        config |= 0x1;
+        aw_fel_spiflash_write_status(dev, SR2_ADDR, config);
+    }
 
     /* For F35SQA001G, max chunk size = page size = 2K */
 	if (max_chunk_size > F35SQA001G_PAGE_SIZE)
@@ -2295,27 +2364,6 @@ void aw_fel_spiflash_read(feldev_handle *dev,
 }
 
 /*
- * Read status command
- */
-static uint8_t aw_fel_spiflash_read_status(feldev_handle *dev, uint8_t sta_addr)
-{
-    soc_info_t *soc_info = dev->soc_info;
-
-    /* get feature command: 0x0F sta_addr S7-0 */
-    uint8_t cmdbuf[] = { 2, 0, 1, 0, 0x0F, 0x00, 0x00};
-
-    /* prepare command */
-    cmdbuf[5] = sta_addr;
-
-    /* execure spi */
-    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
-    aw_fel_remotefunc_execute(dev, NULL);
-    aw_fel_read(dev, soc_info->spl_addr, cmdbuf, sizeof(cmdbuf));
-
-    return cmdbuf[6];
-}
-
-/*
  * Write enable command
  */
 static void aw_fel_spiflash_write_enable(feldev_handle *dev)
@@ -2339,48 +2387,6 @@ static void aw_fel_spiflash_write_enable(feldev_handle *dev)
         }
         timeout--;
     }while(!(status & 0x2));
-}
-
-/*
- * Write status command
- */
-static void aw_fel_spiflash_write_status(feldev_handle *dev, uint8_t sta_addr, uint8_t value)
-{
-    soc_info_t *soc_info = dev->soc_info;
-
-    /* set feature command: 0x1F sta_addr S7-0 */
-    uint8_t cmdbuf[] = { 3, 0, 0, 0, 0x1F, 0x00, 0x00};
-
-    /* prepare command */
-    cmdbuf[5] = sta_addr;
-    cmdbuf[6] = value;
-
-    /* execure spi */
-    aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
-    aw_fel_remotefunc_execute(dev, NULL);
-}
-
-/*
- * Wait for SPI flash operation
- */
-static uint8_t aw_fel_spiflash_wait_for_busy(feldev_handle *dev)
-{
-    uint8_t status;
-    uint32_t timeout = 0xFFFFFF;
-    do {
-        // delay();
-        status = aw_fel_spiflash_read_status(dev, SR3_ADDR);
-        if(status & 0x8){
-            printf("Warning! P-FAIL occured\r\n");
-        }
-        if(status & 0x4){
-            printf("Warning! E-FAIL occured\r\n");
-        }
-        if(!timeout){
-            printf("Timeout! wait for busy\r\n");
-        }
-        timeout--;
-    } while(status & 0x1);
 }
 
 /*

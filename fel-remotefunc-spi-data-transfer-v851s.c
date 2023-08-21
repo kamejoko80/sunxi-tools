@@ -74,6 +74,19 @@ typedef unsigned char u8;
  *
  *  Where: total len = 4 + txlen + rxlen <= spl ram size (4096)
  *
+ *  For convenient managing we split up the buffer below:
+ *
+ * | byte 0 | byte 1 | byte 2 | byte 3 |...........|...........|.........|
+ *  \_______________/ \_______________/ \_________/ \_________/ \________/
+ *          |                  |             |           |          |
+ *        txlen              rxlen          cmd        txbuf      rxbuf
+ *                                      <---------> <-------->  <-------->
+ *                                           |          |           |
+ *                                           |          |         rxlen
+ *                                 txlen = cmdlen  +  txdlen
+ *
+ *  Where: total len = 4 + txlen + rxlen = 4 + cmdlen + txdlen + rxlen
+ *
  */
 
 void spi_batch_data_transfer(u8 *buf,
@@ -114,6 +127,12 @@ void spi_batch_data_transfer(u8 *buf,
         bcc_reg &= ~SPI_BCC_STC_MASK;
         bcc_reg |= (SPI_BCC_STC_MASK & txsize);
         bcc_reg &= ~(0xf << 24); /* dummy_cnt = 0 */
+        /* Read from cache(4) or program data load(4) */
+        if((0x6b == txbuf8[0]) || (0x32 == txbuf8[0])) {
+            bcc_reg |= (1 << 29); /* set Quad_EN bit */
+        } else {
+            bcc_reg &= ~(1 << 29); /* clear Quad_EN bit */
+        }
         writel(bcc_reg, spi_bcc_reg);
     }
 
