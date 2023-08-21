@@ -903,7 +903,7 @@ int clock_set_corepll(feldev_handle *dev, int frequency)
 	reg_val = readl((uint32_t)&ccm->cpu_axi_cfg);
 	reg_val &= ~(0x07 << 24);
 	writel(reg_val, (uint32_t)&ccm->cpu_axi_cfg);
-	delay();
+	//delay();
 
 	/*pll output disable*/
 	reg_val = readl((uint32_t)&ccm->pll1_cfg);
@@ -917,13 +917,13 @@ int clock_set_corepll(feldev_handle *dev, int frequency)
 	reg_val &= ~((0xff << 8)  | (0x03 << 0));
 	reg_val |= (pll_factor.FactorN << 8) | (pll_factor.FactorM << 0) ;
 	writel(reg_val, (uint32_t)&ccm->pll1_cfg);
-	delay();
+	//delay();
 
 	reg_val = readl((uint32_t)&ccm->cpu_axi_cfg);
 	reg_val &= ~(0x03 << 16);
 	reg_val |= (pll_factor.FactorP << 16);
 	writel(reg_val, (uint32_t)&ccm->cpu_axi_cfg);
-	delay();
+	//delay();
 
 	/*enable lock*/
 	reg_val = readl((uint32_t)&ccm->pll1_cfg);
@@ -1021,7 +1021,7 @@ static int sunxi_spi_clk_init(feldev_handle *dev, uint32_t mod_clk)
     /* spi0 reset */
     writel(0, (uint32_t)&ccm->spi_gate_reset);
     writel(1 << 16, (uint32_t)&ccm->spi_gate_reset);
-    delay();
+    //delay();
     /* spi0 gating */
     writel((1 << 16) | (1 << 0), (uint32_t)&ccm->spi_gate_reset);
 
@@ -1545,7 +1545,7 @@ int spi_xfer(feldev_handle *dev, const uint8_t *tx, size_t tx_len, size_t dummy_
 			printf("SPI_ISR time_out \n");
 			return -1;
 		}
-        delay();
+        //delay();
 	}
 
 	/* check SPI_EXCHANGE when SPI_MBC is 0 */
@@ -1817,7 +1817,7 @@ static bool spi0_init(feldev_handle *dev)
             exit(1);
 
         spi_soft_reset(dev);
-        delay();
+        //delay();
 
         /* 1. enable the spi module */
         spi_enable_bus(dev);
@@ -1888,7 +1888,7 @@ static bool spi0_init(feldev_handle *dev)
         tx[2] = 0x00; // PA[15-8]
         tx[3] = 0x00; // PA[7-0]
         spi_xfer(dev, tx, 4, 0, NULL, 0);
-        delay();
+        //delay();
 
         // Read from cache 0x03
         tx[0] = 0x3;
