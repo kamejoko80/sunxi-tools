@@ -2375,6 +2375,7 @@ static void aw_fel_spiflash_write_enable(feldev_handle *dev)
     aw_fel_write(dev, cmdbuf, soc_info->spl_addr, sizeof(cmdbuf));
     aw_fel_remotefunc_execute(dev, NULL);
 
+#if 0
     /* make sure WEL is set */
     uint8_t status;
     uint32_t timeout = 0xFFFFFF;
@@ -2385,6 +2386,8 @@ static void aw_fel_spiflash_write_enable(feldev_handle *dev)
         }
         timeout--;
     }while(!(status & 0x2));
+#endif
+
 }
 
 /*
@@ -2531,11 +2534,11 @@ static void aw_fel_spiflash_program_execute(feldev_handle *dev, uint32_t page_ad
  */
 static void aw_fel_spiflash_page_program(feldev_handle *dev, uint32_t page_addr, uint8_t *buf, size_t len)
 {
-#ifdef USE_PROGRAM_LOAD_QUAD    
+#ifdef USE_PROGRAM_LOAD_QUAD
     aw_fel_spiflash_program_data_load_quad(dev, buf, len);
 #else
-    aw_fel_spiflash_program_data_load(dev, buf, len);    
-#endif    
+    aw_fel_spiflash_program_data_load(dev, buf, len);
+#endif
     aw_fel_spiflash_program_execute(dev, page_addr);
 }
 
@@ -2753,7 +2756,7 @@ void aw_fel_spiflash_write(feldev_handle *dev,
     /* set QE bit */
     uint8_t config = aw_fel_spiflash_read_status(dev, SR2_ADDR);
     config |= 0x1;
-    aw_fel_spiflash_write_status(dev, SR2_ADDR, config);    
+    aw_fel_spiflash_write_status(dev, SR2_ADDR, config);
 #endif
 
     /* block program process */
