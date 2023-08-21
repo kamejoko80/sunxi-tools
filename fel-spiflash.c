@@ -2048,9 +2048,7 @@ static void prepare_spi_batch_data_transfer(feldev_handle *dev, uint32_t buf)
 }
 
 #define F35SQA001G_PAGE_SIZE (2048)
-#define CMDTXLEN             (4)
-#define CMDRXLEN             (F35SQA001G_PAGE_SIZE)
-#define CMDBUF_SIZE          (4 + CMDTXLEN + CMDRXLEN)
+//#define USE_PROGRAM_LOAD_QUAD 
 
 #define SR1_ADDR (0xA0) /* Protection register */
 #define SR2_ADDR (0xB0) /* Configuration register */
@@ -2432,6 +2430,43 @@ static void aw_fel_spiflash_read_from_cache(feldev_handle *dev, size_t len)
     aw_fel_spiflash_spibuf_free(&spibuf);
 }
 
+
+#ifdef USE_PROGRAM_LOAD_QUAD
+
+/*
+ * Load program data quad
+ */
+static void aw_fel_spiflash_program_data_load_quad(feldev_handle *dev, uint8_t *buf, size_t len)
+{
+
+    soc_info_t *soc_info = dev->soc_info;
+    spi_buf spibuf;
+
+    if(len > F35SQA001G_PAGE_SIZE){
+        printf("Warning! len exceeds memory page size %d\r\n", F35SQA001G_PAGE_SIZE);
+        len = F35SQA001G_PAGE_SIZE;
+    }
+
+    /*
+     * load program data cmd format: 0x32 CA15-8 CA7-0 D0 D1 D2...
+     */
+    uint8_t cmd[] = {0x32, 0x00, 0x00 };
+    aw_fel_spiflash_spibuf_create(&spibuf, cmd, sizeof(cmd), len, 0);
+    memcpy((void *)spibuf.txbuf, (void *)buf, len);
+
+    /* Execute command */
+    aw_fel_write(dev, spibuf.buf, soc_info->spl_addr, spibuf.len);
+    aw_fel_remotefunc_execute(dev, NULL);
+
+    /* print data in cache (debugging) */
+    //aw_fel_spiflash_read_from_cache(dev, F35SQA001G_PAGE_SIZE);
+
+    /* free memory */
+    aw_fel_spiflash_spibuf_free(&spibuf);
+}
+
+#else /* USE_PROGRAM_LOAD_QUAD */
+
 /*
  * Load program data
  */
@@ -2464,6 +2499,8 @@ static void aw_fel_spiflash_program_data_load(feldev_handle *dev, uint8_t *buf, 
     aw_fel_spiflash_spibuf_free(&spibuf);
 }
 
+#endif /* USE_PROGRAM_LOAD_QUAD */
+
 /*
  * Program execute
  */
@@ -2494,7 +2531,11 @@ static void aw_fel_spiflash_program_execute(feldev_handle *dev, uint32_t page_ad
  */
 static void aw_fel_spiflash_page_program(feldev_handle *dev, uint32_t page_addr, uint8_t *buf, size_t len)
 {
-    aw_fel_spiflash_program_data_load(dev, buf, len);
+#ifdef USE_PROGRAM_LOAD_QUAD    
+    aw_fel_spiflash_program_data_load_quad(dev, buf, len);
+#else
+    aw_fel_spiflash_program_data_load(dev, buf, len);    
+#endif    
     aw_fel_spiflash_program_execute(dev, page_addr);
 }
 
@@ -2569,10 +2610,10 @@ static aw_fel_spiflash_block_read(feldev_handle *dev, uint32_t page_addr, uint8_
     }
 
     /*           [4]     [5]    [6]    [7] ...
-     * command: 0x03   CA15-8  CA7-0  Dummy  D0 D1 D2...
+     * command: 0x6b   CA15-8  CA7-0  Dummy  D0 D1 D2...
      */
 
-    uint8_t cmd[] = {0x03, 0x00, 0x00, 0};
+    uint8_t cmd[] = {0x6b, 0x00, 0x00, 0};
     aw_fel_spiflash_spibuf_create(&spibuf, cmd, sizeof(cmd), 0, F35SQA001G_PAGE_SIZE);
 
     /* read block */
@@ -2580,7 +2621,7 @@ static aw_fel_spiflash_block_read(feldev_handle *dev, uint32_t page_addr, uint8_
         /* reach to cache */
         aw_fel_spiflash_read_to_cache(dev, page_addr + i);
 
-        /* read data from cache */
+        /* read data from cache(quad) */
         aw_fel_write(dev, spibuf.buf, soc_info->spl_addr, spibuf.len);
         aw_fel_remotefunc_execute(dev, NULL);
         aw_fel_read(dev, soc_info->spl_addr, spibuf.buf, spibuf.len);
@@ -2693,8 +2734,9 @@ void aw_fel_spiflash_write(feldev_handle *dev,
     /* read backup 1 */
     aw_fel_spiflash_block_read(dev, block_start * 64, block_start_buf, 64 * F35SQA001G_PAGE_SIZE);
     /* read backup 2 */
-    aw_fel_spiflash_block_read(dev, block_end * 64, block_end_buf, 64 * F35SQA001G_PAGE_SIZE);
-
+    if(block_offset_2){
+        aw_fel_spiflash_block_read(dev, block_end * 64, block_end_buf, 64 * F35SQA001G_PAGE_SIZE);
+    }
     /* erase blocks */
     aw_fel_spiflash_erase_block(dev, block_start * 64, block_cnt, progress);
 
@@ -2706,6 +2748,13 @@ void aw_fel_spiflash_write(feldev_handle *dev,
     memcpy((void *)&block_start_buf[block_offset_1], (void *)buf8, copy_len);
     buf8 += copy_len;
     len -= copy_len;
+
+#ifdef USE_PROGRAM_LOAD_QUAD
+    /* set QE bit */
+    uint8_t config = aw_fel_spiflash_read_status(dev, SR2_ADDR);
+    config |= 0x1;
+    aw_fel_spiflash_write_status(dev, SR2_ADDR, config);    
+#endif
 
     /* block program process */
     printf("Program block[s]:\r\n");
