@@ -37,7 +37,7 @@
 
  - For SPI flash boot:
 
-  ```
+ ```
     > ./sunxi-fel.exe -p spiflash-write 0 jtag-loop.sunxi
  ```
 
@@ -46,6 +46,12 @@
         • Must flip the USB cable to switch USB to UART bridge mode so that V851s can boot from SD or SPI flash.
         • LED1 will be on when booting successfully.
         • I have tried to configure JTAG on PH but unfortunately it doesn't work, currently JTAG works only with PF
+
+# How to start opencd gdb server:
+
+ ```
+    > openocd -f interface/jlink.cfg -f target/allwinner_v851s.cfg
+ ```
 
 # How to generate fel-remotefunc-spi-data-transfer-v851s.h ?
 
