@@ -2747,10 +2747,17 @@ void aw_fel_spiflash_write(feldev_handle *dev,
     progress_start(progress, len);
 
     /* update backup 1 buf and program */
-    copy_len = (64 * F35SQA001G_PAGE_SIZE) - block_offset_1;
-    memcpy((void *)&block_start_buf[block_offset_1], (void *)buf8, copy_len);
-    buf8 += copy_len;
-    len -= copy_len;
+    if(len) {
+        if((64 * F35SQA001G_PAGE_SIZE) < len) {
+            copy_len = (64 * F35SQA001G_PAGE_SIZE) - block_offset_1;
+        } else {
+            copy_len = len - block_offset_1;
+        }
+
+        memcpy((void *)&block_start_buf[block_offset_1], (void *)buf8, copy_len);
+        buf8 += copy_len;
+        len -= copy_len;
+    }
 
 #ifdef USE_PROGRAM_LOAD_QUAD
     /* set QE bit */
@@ -2767,16 +2774,23 @@ void aw_fel_spiflash_write(feldev_handle *dev,
     progress_update(copy_len);
 
     /* program other blocks */
-    for(uint32_t i = block_start + 1; i < block_end; i++) {
-        aw_fel_spiflash_block_program(dev, i*64, buf8, 64 * F35SQA001G_PAGE_SIZE);
-        buf8 += 64 * F35SQA001G_PAGE_SIZE;
-        len -= 64 * F35SQA001G_PAGE_SIZE;
-        progress_update(64 * F35SQA001G_PAGE_SIZE);
+    if(len) {
+        for(uint32_t i = block_start + 1; i < block_end; i++) {
+            aw_fel_spiflash_block_program(dev, i*64, buf8, 64 * F35SQA001G_PAGE_SIZE);
+            buf8 += 64 * F35SQA001G_PAGE_SIZE;
+            len -= 64 * F35SQA001G_PAGE_SIZE;
+            progress_update(64 * F35SQA001G_PAGE_SIZE);
+        }
     }
 
     /* update backup 2 buf and program */
-    if(block_offset_2) {
-        copy_len = block_offset_2;
+    if(block_offset_2 && len) {
+        if(block_offset_2 < len){
+            copy_len = block_offset_2;
+        }else{
+            copy_len = len;
+        }
+
         memcpy((void *)block_end_buf, (void *)buf8, copy_len);
         buf8 += copy_len;
         len -= copy_len;

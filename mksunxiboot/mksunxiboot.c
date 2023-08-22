@@ -140,6 +140,8 @@ int main(int argc, char * argv[])
 				& 0x00FFFFFF
 			);
 	memcpy(img.header.magic, BOOT0_MAGIC, 8);    /* no '0' termination */
+    img.header.pub_head_size = sizeof(boot_file_head_t);
+    memcpy((void*)img.header.platform, (void *)"4.0", sizeof("4.0"));
 	img.header.length = ALIGN(load_size + sizeof(boot_file_head_t), BLOCK_SIZE);
 	gen_check_sum((void *)&img);
 
